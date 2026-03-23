@@ -1,14 +1,53 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
-function SetRow({ set, onDelete }) {
+const CATEGORY_COLORS = {
+  chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',   label: 'Chest' },
+  back:      { dot: 'bg-blue-500',   badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',   label: 'Back' },
+  abs:       { dot: 'bg-amber-400',  badge: 'bg-amber-400/20 text-amber-300 border-amber-400/40', label: 'Abs' },
+  legs:      { dot: 'bg-green-500',  badge: 'bg-green-500/20 text-green-300 border-green-500/40', label: 'Legs' },
+  triceps:   { dot: 'bg-orange-500', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40', label: 'Triceps' },
+  biceps:    { dot: 'bg-violet-500', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/40', label: 'Biceps' },
+  shoulders: { dot: 'bg-sky-500',    badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40',       label: 'Shoulders' },
+  mobility:  { dot: 'bg-teal-500',   badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40',   label: 'Mobility' },
+};
+
+function getCategoryColor(category) {
+  if (!category) return null;
+  return CATEGORY_COLORS[category.toLowerCase()] || null;
+}
+
+function SetRow({ set, categoryMap, onDelete }) {
+  const category = categoryMap[set.exercise_name.toLowerCase()];
+  const color = getCategoryColor(category);
+
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors">
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors">
+      {/* Category colour bar */}
+      <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-700'}`} />
+
       <div className="flex-1 min-w-0">
-        <p className="text-zinc-200 text-sm font-medium truncate">{set.exercise_name}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-zinc-200 text-sm font-medium truncate">{set.exercise_name}</p>
+          {set.set_type === 'dropset' && (
+            <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 font-medium">
+              Drop
+            </span>
+          )}
+          {set.set_type === 'superset' && (
+            <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-medium">
+              Super
+            </span>
+          )}
+          {color && (
+            <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>
+              {color.label}
+            </span>
+          )}
+        </div>
         <p className="text-zinc-500 text-xs mt-0.5">
           {set.weight_kg > 0 && `${set.weight_kg} kg`}
           {set.weight_kg > 0 && set.reps > 0 && ' × '}
@@ -18,9 +57,10 @@ function SetRow({ set, onDelete }) {
             ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}`}
         </p>
       </div>
+
       <button
         onClick={() => onDelete(set.id)}
-        className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded ml-3"
+        className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded ml-auto flex-shrink-0"
       >
         <Trash2 className="w-4 h-4" />
       </button>
@@ -46,7 +86,13 @@ export default function WorkoutLog() {
   const [distanceUnit, setDistanceUnit] = useState('km');
   const [durationMin, setDurationMin] = useState('');
   const [durationSec, setDurationSec] = useState('');
+  const [setType, setSetType] = useState('normal');
   const [saving, setSaving] = useState(false);
+
+  // Map exercise name (lowercase) → category for colour lookup
+  const categoryMap = Object.fromEntries(
+    exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])
+  );
 
   async function fetchExercises() {
     const { data } = await supabase
@@ -90,9 +136,7 @@ export default function WorkoutLog() {
   }, [selectedDate, user]);
 
   useEffect(() => {
-    if (user) {
-      fetchExercises();
-    }
+    if (user) fetchExercises();
   }, [user]);
 
   useEffect(() => {
@@ -163,6 +207,7 @@ export default function WorkoutLog() {
         distance_unit: distanceUnit || '',
         duration_seconds,
         set_order: maxOrder + 1,
+        set_type: setType,
       });
 
       if (insertErr) throw insertErr;
@@ -219,6 +264,7 @@ export default function WorkoutLog() {
       >
         <h2 className="text-zinc-100 font-semibold mb-4">Add Set</h2>
 
+        {/* Exercise input */}
         <div className="relative mb-4">
           <label className="block text-xs font-medium text-zinc-400 mb-1">Exercise *</label>
           <input
@@ -233,26 +279,31 @@ export default function WorkoutLog() {
           />
           {showSuggestions && exerciseSuggestions.length > 0 && (
             <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden">
-              {exerciseSuggestions.map((ex) => (
-                <button
-                  key={ex.name}
-                  type="button"
-                  onMouseDown={() => {
-                    setExerciseInput(ex.name);
-                    setShowSuggestions(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 flex items-center justify-between"
-                >
-                  <span>{ex.name}</span>
-                  {ex.category && (
-                    <span className="text-xs text-zinc-500">{ex.category}</span>
-                  )}
-                </button>
-              ))}
+              {exerciseSuggestions.map((ex) => {
+                const color = getCategoryColor(ex.category);
+                return (
+                  <button
+                    key={ex.name}
+                    type="button"
+                    onMouseDown={() => {
+                      setExerciseInput(ex.name);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    {color && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />}
+                    <span className="flex-1">{ex.name}</span>
+                    {ex.category && (
+                      <span className="text-xs text-zinc-500">{ex.category}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
+        {/* Weight / Reps / Distance / Duration */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Weight (kg)</label>
@@ -325,6 +376,33 @@ export default function WorkoutLog() {
           </div>
         </div>
 
+        {/* Set type toggles */}
+        <div className="flex items-center gap-2 mb-5">
+          <span className="text-xs font-medium text-zinc-400 mr-1">Set type:</span>
+          {[
+            { value: 'normal',   label: 'Normal' },
+            { value: 'dropset',  label: 'Dropset' },
+            { value: 'superset', label: 'Superset' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setSetType(opt.value)}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                setType === opt.value
+                  ? opt.value === 'dropset'
+                    ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
+                    : opt.value === 'superset'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
+                    : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
+                  : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         <button
           type="submit"
           disabled={saving}
@@ -335,6 +413,7 @@ export default function WorkoutLog() {
         </button>
       </form>
 
+      {/* Sets list */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
           <h2 className="text-zinc-100 font-semibold">
@@ -344,9 +423,7 @@ export default function WorkoutLog() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-24 text-zinc-400 text-sm">
-            Loading…
-          </div>
+          <div className="flex items-center justify-center h-24 text-zinc-400 text-sm">Loading…</div>
         ) : sets.length === 0 ? (
           <div className="flex items-center justify-center h-24 text-zinc-500 text-sm">
             No sets logged for this day yet
@@ -354,7 +431,7 @@ export default function WorkoutLog() {
         ) : (
           <div className="divide-y divide-zinc-800">
             {sets.map((set) => (
-              <SetRow key={set.id} set={set} onDelete={handleDeleteSet} />
+              <SetRow key={set.id} set={set} categoryMap={categoryMap} onDelete={handleDeleteSet} />
             ))}
           </div>
         )}
