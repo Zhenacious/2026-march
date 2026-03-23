@@ -167,12 +167,6 @@ export default function WorkoutLog() {
 
       if (insertErr) throw insertErr;
 
-      setExerciseInput('');
-      setWeightKg('');
-      setReps('');
-      setDistance('');
-      setDurationMin('');
-      setDurationSec('');
       setSuccess('Set added!');
       setTimeout(() => setSuccess(''), 2000);
       await fetchSets();
