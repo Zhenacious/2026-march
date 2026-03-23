@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -48,6 +48,9 @@ export default function Progress() {
   const [exercises, setExercises] = useState([]);      // [{ name, category }]
   const [selectedExercise, setSelectedExercise] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
+  const [defaultExercise, setDefaultExercise] = useState(
+    () => localStorage.getItem('progress_default_exercise') || ''
+  );
   const [timeScale, setTimeScale] = useState('all');
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -85,7 +88,9 @@ export default function Progress() {
 
       const withCats = uniqueNames.map((name) => ({ name, category: catMap[name] || '' }));
       setExercises(withCats);
-      if (withCats.length > 0) setSelectedExercise(withCats[0].name);
+      const saved = localStorage.getItem('progress_default_exercise');
+      const initial = saved && withCats.some((e) => e.name === saved) ? saved : withCats[0]?.name || '';
+      setSelectedExercise(initial);
     }
     fetchExercises();
   }, [user]);
@@ -212,7 +217,27 @@ export default function Progress() {
           ))}
         </div>
 
-        <label className="block text-xs font-medium text-zinc-400 mb-1">Exercise</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium text-zinc-400">Exercise</label>
+          {selectedExercise && (
+            <button
+              onClick={() => {
+                const isDefault = defaultExercise === selectedExercise;
+                const next = isDefault ? '' : selectedExercise;
+                localStorage.setItem('progress_default_exercise', next);
+                setDefaultExercise(next);
+              }}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                defaultExercise === selectedExercise
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600'
+              }`}
+            >
+              <Star className={`w-3 h-3 ${defaultExercise === selectedExercise ? 'fill-amber-400 text-amber-400' : ''}`} />
+              {defaultExercise === selectedExercise ? 'Default' : 'Set as default'}
+            </button>
+          )}
+        </div>
         {exercises.length === 0 ? (
           <p className="text-zinc-500 text-sm">No exercises found. Log some workouts first.</p>
         ) : (() => {
@@ -230,7 +255,9 @@ export default function Progress() {
               className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-48"
             >
               {filtered.map((ex) => (
-                <option key={ex.name} value={ex.name}>{ex.name}</option>
+                <option key={ex.name} value={ex.name}>
+                  {ex.name}{defaultExercise === ex.name ? ' ★' : ''}
+                </option>
               ))}
             </select>
           );

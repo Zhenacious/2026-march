@@ -1,25 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Dumbbell, CalendarDays, TrendingUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, Dumbbell, CalendarDays, TrendingUp, Plus, Upload } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-
-function StatCard({ icon: Icon, label, value, color }) {
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex items-start gap-4">
-      <div className={`p-3 rounded-xl ${color}`}>
-        <Icon className="w-5 h-5 text-white" />
-      </div>
-      <div>
-        <p className="text-zinc-400 text-sm">{label}</p>
-        <p className="text-zinc-100 text-2xl font-semibold mt-0.5">{value}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalWorkouts: 0,
     totalSets: 0,
@@ -33,13 +21,11 @@ export default function Dashboard() {
     async function fetchStats() {
       try {
         setLoading(true);
-
         const { data: workouts, error: wErr } = await supabase
           .from('workouts')
           .select('id, date')
           .eq('user_id', user.id)
           .order('date', { ascending: false });
-
         if (wErr) throw wErr;
 
         const totalWorkouts = workouts?.length || 0;
@@ -47,31 +33,23 @@ export default function Dashboard() {
           workouts && workouts.length > 0
             ? format(parseISO(workouts[0].date), 'MMM d, yyyy')
             : '—';
-
         const workoutIds = (workouts || []).map((w) => w.id);
 
         let totalSets = 0;
         let mostFrequent = '—';
-
         if (workoutIds.length > 0) {
           const { data: sets, error: sErr } = await supabase
             .from('workout_sets')
             .select('id, exercise_name')
             .in('workout_id', workoutIds);
-
           if (sErr) throw sErr;
-
           totalSets = sets?.length || 0;
-
           if (sets && sets.length > 0) {
             const freq = {};
-            sets.forEach((s) => {
-              freq[s.exercise_name] = (freq[s.exercise_name] || 0) + 1;
-            });
+            sets.forEach((s) => { freq[s.exercise_name] = (freq[s.exercise_name] || 0) + 1; });
             mostFrequent = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
           }
         }
-
         setStats({ totalWorkouts, totalSets, mostFrequent, lastWorkout });
       } catch (err) {
         setError(err.message);
@@ -79,22 +57,15 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
-
     if (user) fetchStats();
   }, [user]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-zinc-400">Loading stats…</div>
-      </div>
-    );
-  }
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-zinc-100 mb-1">Dashboard</h1>
-      <p className="text-zinc-400 text-sm mb-8">Welcome back, {user?.email}</p>
+      <h1 className="text-2xl font-bold text-zinc-100 mb-0.5">Dashboard</h1>
+      <p className="text-zinc-500 text-sm mb-8">Welcome back</p>
 
       {error && (
         <div className="bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
@@ -102,65 +73,92 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          icon={CalendarDays}
-          label="Total Workouts"
-          value={stats.totalWorkouts}
-          color="bg-violet-600"
-        />
-        <StatCard
-          icon={Activity}
-          label="Total Sets Logged"
-          value={stats.totalSets}
-          color="bg-blue-600"
-        />
-        <StatCard
-          icon={Dumbbell}
-          label="Most Frequent Exercise"
-          value={stats.mostFrequent}
-          color="bg-emerald-600"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Last Workout"
-          value={stats.lastWorkout}
-          color="bg-amber-600"
-        />
+      {/* Big action shortcuts */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <button
+          onClick={() => navigate(`/workouts?date=${today}`)}
+          className="group relative bg-violet-600 hover:bg-violet-500 rounded-2xl p-8 text-left transition-colors overflow-hidden"
+        >
+          <div className="absolute right-6 top-6 opacity-20 group-hover:opacity-30 transition-opacity">
+            <Plus className="w-24 h-24" />
+          </div>
+          <div className="relative">
+            <div className="bg-white/20 rounded-xl p-3 w-fit mb-4">
+              <Plus className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-white/70 text-sm font-medium mb-1">Ready to train?</p>
+            <p className="text-white text-2xl font-bold">Log Today's Workout</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/calendar')}
+          className="group relative bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-8 text-left transition-colors overflow-hidden"
+        >
+          <div className="absolute right-6 top-6 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CalendarDays className="w-24 h-24 text-zinc-100" />
+          </div>
+          <div className="relative">
+            <div className="bg-zinc-700 rounded-xl p-3 w-fit mb-4">
+              <CalendarDays className="w-7 h-7 text-zinc-200" />
+            </div>
+            <p className="text-zinc-500 text-sm font-medium mb-1">See your history</p>
+            <p className="text-zinc-100 text-2xl font-bold">View Calendar</p>
+          </div>
+        </button>
       </div>
 
-      <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Quick Start</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <a
-            href="/workouts"
-            className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl px-4 py-3 transition-colors group"
-          >
-            <Activity className="w-4 h-4 text-violet-400" />
-            <span className="text-zinc-300 text-sm group-hover:text-zinc-100 transition-colors">
-              Log a Workout
-            </span>
-          </a>
-          <a
-            href="/progress"
-            className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl px-4 py-3 transition-colors group"
-          >
-            <TrendingUp className="w-4 h-4 text-blue-400" />
-            <span className="text-zinc-300 text-sm group-hover:text-zinc-100 transition-colors">
-              View Progress
-            </span>
-          </a>
-          <a
-            href="/import"
-            className="flex items-center gap-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl px-4 py-3 transition-colors group"
-          >
-            <Dumbbell className="w-4 h-4 text-emerald-400" />
-            <span className="text-zinc-300 text-sm group-hover:text-zinc-100 transition-colors">
-              Import FitNotes Data
-            </span>
-          </a>
-        </div>
+      {/* Secondary shortcuts */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <button
+          onClick={() => navigate('/progress')}
+          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
+        >
+          <TrendingUp className="w-6 h-6 text-violet-400" />
+          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Progress</span>
+        </button>
+        <button
+          onClick={() => navigate('/exercises')}
+          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
+        >
+          <Dumbbell className="w-6 h-6 text-emerald-400" />
+          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Exercises</span>
+        </button>
+        <button
+          onClick={() => navigate('/import')}
+          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
+        >
+          <Upload className="w-6 h-6 text-blue-400" />
+          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Import</span>
+        </button>
+        <button
+          onClick={() => navigate('/workouts')}
+          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
+        >
+          <Activity className="w-6 h-6 text-amber-400" />
+          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Workouts</span>
+        </button>
       </div>
+
+      {/* Stats — compact */}
+      {!loading && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Your Stats</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Workouts', value: stats.totalWorkouts, color: 'text-violet-400' },
+              { label: 'Total Sets', value: stats.totalSets, color: 'text-blue-400' },
+              { label: 'Most Frequent', value: stats.mostFrequent, color: 'text-emerald-400' },
+              { label: 'Last Workout', value: stats.lastWorkout, color: 'text-amber-400' },
+            ].map((s) => (
+              <div key={s.label}>
+                <p className="text-zinc-500 text-xs mb-1">{s.label}</p>
+                <p className={`font-semibold text-sm ${s.color} truncate`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
