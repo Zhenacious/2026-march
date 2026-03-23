@@ -94,6 +94,18 @@ export default function WorkoutLog() {
   const [setType, setSetType] = useState('normal');
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [activeGroup, setActiveGroup] = useState('All');
+
+  const MUSCLE_GROUPS = [
+    { label: 'All',       categories: null },
+    { label: 'Chest',     categories: ['chest'] },
+    { label: 'Back',      categories: ['back'] },
+    { label: 'Arms',      categories: ['biceps', 'triceps'] },
+    { label: 'Legs',      categories: ['legs'] },
+    { label: 'Shoulders', categories: ['shoulders'] },
+    { label: 'Abs',       categories: ['abs'] },
+    { label: 'Mobility',  categories: ['mobility'] },
+  ];
 
   // Map exercise name (lowercase) → category for colour lookup
   const categoryMap = Object.fromEntries(
@@ -439,11 +451,29 @@ export default function WorkoutLog() {
 
       {/* Sets list */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-          <h2 className="text-zinc-100 font-semibold">
-            Sets for {selectedDate ? format(new Date(selectedDate + 'T00:00:00'), 'MMMM d, yyyy') : ''}
-          </h2>
-          <span className="text-zinc-500 text-xs">{sets.length} sets</span>
+        <div className="px-5 py-4 border-b border-zinc-800">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-zinc-100 font-semibold">
+              Sets for {selectedDate ? format(new Date(selectedDate + 'T00:00:00'), 'MMMM d, yyyy') : ''}
+            </h2>
+            <span className="text-zinc-500 text-xs">{sets.length} sets</span>
+          </div>
+          {/* Muscle group filter */}
+          <div className="flex gap-1.5 flex-wrap">
+            {MUSCLE_GROUPS.map((g) => (
+              <button
+                key={g.label}
+                onClick={() => setActiveGroup(g.label)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                  activeGroup === g.label
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -452,13 +482,25 @@ export default function WorkoutLog() {
           <div className="flex items-center justify-center h-24 text-zinc-500 text-sm">
             No sets logged for this day yet
           </div>
-        ) : (
-          <div className="divide-y divide-zinc-800">
-            {sets.map((set) => (
-              <SetRow key={set.id} set={set} categoryMap={categoryMap} onDelete={handleDeleteSet} />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
+          const visibleSets = sets.filter((set) => {
+            if (group.categories === null) return true;
+            const cat = (categoryMap[set.exercise_name.toLowerCase()] || '').toLowerCase();
+            return group.categories.includes(cat);
+          });
+          return visibleSets.length === 0 ? (
+            <div className="flex items-center justify-center h-16 text-zinc-500 text-sm">
+              No {activeGroup} sets today
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-800">
+              {visibleSets.map((set) => (
+                <SetRow key={set.id} set={set} categoryMap={categoryMap} onDelete={handleDeleteSet} />
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

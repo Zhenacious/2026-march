@@ -32,10 +32,22 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+const MUSCLE_GROUPS = [
+  { label: 'All',       categories: null },
+  { label: 'Chest',     categories: ['chest'] },
+  { label: 'Back',      categories: ['back'] },
+  { label: 'Arms',      categories: ['biceps', 'triceps'] },
+  { label: 'Legs',      categories: ['legs'] },
+  { label: 'Shoulders', categories: ['shoulders'] },
+  { label: 'Abs',       categories: ['abs'] },
+  { label: 'Mobility',  categories: ['mobility'] },
+];
+
 export default function Progress() {
   const { user } = useAuth();
-  const [exercises, setExercises] = useState([]);
+  const [exercises, setExercises] = useState([]);      // [{ name, category }]
   const [selectedExercise, setSelectedExercise] = useState('');
+  const [activeGroup, setActiveGroup] = useState('All');
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -58,12 +70,35 @@ export default function Progress() {
 
       if (!sets) return;
 
-      const unique = [...new Set(sets.map((s) => s.exercise_name))].sort();
-      setExercises(unique);
-      if (unique.length > 0) setSelectedExercise(unique[0]);
+      const uniqueNames = [...new Set(sets.map((s) => s.exercise_name))].sort();
+
+      // Fetch categories for these exercises
+      const { data: exData } = await supabase
+        .from('exercises')
+        .select('name, category')
+        .eq('user_id', user.id)
+        .in('name', uniqueNames);
+
+      const catMap = {};
+      (exData || []).forEach((ex) => { catMap[ex.name] = ex.category || ''; });
+
+      const withCats = uniqueNames.map((name) => ({ name, category: catMap[name] || '' }));
+      setExercises(withCats);
+      if (withCats.length > 0) setSelectedExercise(withCats[0].name);
     }
     fetchExercises();
   }, [user]);
+
+  // When group changes, reset selected exercise to first in filtered list
+  useEffect(() => {
+    const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
+    const filtered = exercises.filter((ex) => {
+      if (group.categories === null) return true;
+      return group.categories.includes((ex.category || '').toLowerCase());
+    });
+    if (filtered.length > 0) setSelectedExercise(filtered[0].name);
+    else setSelectedExercise('');
+  }, [activeGroup, exercises]);
 
   const fetchChartData = useCallback(async () => {
     if (!user || !selectedExercise) return;
@@ -140,22 +175,46 @@ export default function Progress() {
       )}
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
+        {/* Muscle group tabs */}
+        <div className="flex gap-1.5 flex-wrap mb-4">
+          {MUSCLE_GROUPS.map((g) => (
+            <button
+              key={g.label}
+              onClick={() => setActiveGroup(g.label)}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                activeGroup === g.label
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
         <label className="block text-xs font-medium text-zinc-400 mb-1">Exercise</label>
         {exercises.length === 0 ? (
           <p className="text-zinc-500 text-sm">No exercises found. Log some workouts first.</p>
-        ) : (
-          <select
-            value={selectedExercise}
-            onChange={(e) => setSelectedExercise(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-48"
-          >
-            {exercises.map((ex) => (
-              <option key={ex} value={ex}>
-                {ex}
-              </option>
-            ))}
-          </select>
-        )}
+        ) : (() => {
+          const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
+          const filtered = exercises.filter((ex) => {
+            if (group.categories === null) return true;
+            return group.categories.includes((ex.category || '').toLowerCase());
+          });
+          return filtered.length === 0 ? (
+            <p className="text-zinc-500 text-sm">No {activeGroup} exercises logged yet.</p>
+          ) : (
+            <select
+              value={selectedExercise}
+              onChange={(e) => setSelectedExercise(e.target.value)}
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-48"
+            >
+              {filtered.map((ex) => (
+                <option key={ex.name} value={ex.name}>{ex.name}</option>
+              ))}
+            </select>
+          );
+        })()}
       </div>
 
       {loading ? (
