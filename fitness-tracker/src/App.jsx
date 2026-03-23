@@ -9,6 +9,7 @@ import Exercises from './pages/Exercises';
 import CalendarView from './pages/CalendarView';
 import Progress from './pages/Progress';
 import Import from './pages/Import';
+import ExerciseHistory from './pages/ExerciseHistory';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/workouts" element={<WorkoutLog />} />
         <Route path="/exercises" element={<Exercises />} />
+        <Route path="/exercises/:name" element={<ExerciseHistory />} />
         <Route path="/calendar" element={<CalendarView />} />
         <Route path="/progress" element={<Progress />} />
         <Route path="/import" element={<Import />} />

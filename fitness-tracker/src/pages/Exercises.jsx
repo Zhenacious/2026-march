@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, Search, Dumbbell, Sparkles, Pencil, Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Search, Dumbbell, Sparkles, Pencil, Check, X, ChevronRight } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
@@ -30,6 +31,7 @@ const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'le
 
 export default function Exercises() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [exercises, setExercises] = useState([]);
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
@@ -409,7 +411,13 @@ export default function Exercises() {
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
-                          <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
+                          <button
+                            onClick={() => navigate(`/exercises/${encodeURIComponent(ex.name)}`)}
+                            className="text-zinc-200 text-sm flex-1 text-left hover:text-violet-300 transition-colors"
+                          >
+                            {ex.name}
+                          </button>
+                          <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
                           <button
                             onClick={() => startEdit(ex)}
                             className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
