@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
   startOfMonth,
   endOfMonth,
@@ -9,21 +10,17 @@ import {
   eachDayOfInterval,
   format,
   isSameMonth,
-  isSameDay,
   isToday,
   addMonths,
   subMonths,
-  parseISO,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function CalendarView() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workoutDates, setWorkoutDates] = useState({});
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [daySets, setDaySets] = useState([]);
-  const [loadingDay, setLoadingDay] = useState(false);
   const [error, setError] = useState('');
 
   const fetchMonthWorkouts = useCallback(async () => {
@@ -55,29 +52,8 @@ export default function CalendarView() {
     fetchMonthWorkouts();
   }, [fetchMonthWorkouts]);
 
-  async function handleDayClick(day) {
-    const dateStr = format(day, 'yyyy-MM-dd');
-    setSelectedDay(day);
-    setDaySets([]);
-
-    const workoutId = workoutDates[dateStr];
-    if (!workoutId) return;
-
-    setLoadingDay(true);
-    try {
-      const { data, error: err } = await supabase
-        .from('workout_sets')
-        .select('*')
-        .eq('workout_id', workoutId)
-        .order('set_order');
-
-      if (err) throw err;
-      setDaySets(data || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingDay(false);
-    }
+  function handleDayClick(day) {
+    navigate(`/workouts?date=${format(day, 'yyyy-MM-dd')}`);
   }
 
   const monthStart = startOfMonth(currentDate);
@@ -85,12 +61,6 @@ export default function CalendarView() {
   const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const calDays = eachDayOfInterval({ start: calStart, end: calEnd });
-
-  const groupedSets = daySets.reduce((acc, s) => {
-    if (!acc[s.exercise_name]) acc[s.exercise_name] = [];
-    acc[s.exercise_name].push(s);
-    return acc;
-  }, {});
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -103,8 +73,7 @@ export default function CalendarView() {
         </div>
       )}
 
-      <div className="flex gap-6">
-        <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 max-w-lg">
           <div className="flex items-center justify-between mb-5">
             <button
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -139,7 +108,6 @@ export default function CalendarView() {
               const dateStr = format(day, 'yyyy-MM-dd');
               const hasWorkout = !!workoutDates[dateStr];
               const inMonth = isSameMonth(day, currentDate);
-              const selected = selectedDay && isSameDay(day, selectedDay);
               const today = isToday(day);
 
               return (
@@ -149,12 +117,12 @@ export default function CalendarView() {
                   className={`
                     aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors relative
                     ${!inMonth ? 'opacity-25' : ''}
-                    ${selected ? 'bg-violet-600 text-white' : hasWorkout ? 'bg-violet-950 hover:bg-violet-900 text-violet-200' : 'hover:bg-zinc-800 text-zinc-300'}
-                    ${today && !selected ? 'ring-1 ring-violet-500' : ''}
+                    ${hasWorkout ? 'bg-violet-950 hover:bg-violet-900 text-violet-200 cursor-pointer' : 'hover:bg-zinc-800 text-zinc-300 cursor-pointer'}
+                    ${today ? 'ring-1 ring-violet-500' : ''}
                   `}
                 >
                   <span className="text-xs font-medium">{format(day, 'd')}</span>
-                  {hasWorkout && !selected && (
+                  {hasWorkout && (
                     <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-violet-400" />
                   )}
                 </button>
@@ -172,56 +140,6 @@ export default function CalendarView() {
               Today
             </div>
           </div>
-        </div>
-
-        {selectedDay && (
-          <div className="w-72 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-zinc-100 font-semibold">
-                {format(selectedDay, 'MMMM d, yyyy')}
-              </h3>
-              <button
-                onClick={() => setSelectedDay(null)}
-                className="text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {loadingDay ? (
-              <div className="text-zinc-400 text-sm">Loading…</div>
-            ) : !workoutDates[format(selectedDay, 'yyyy-MM-dd')] ? (
-              <div className="text-zinc-500 text-sm">No workout on this day.</div>
-            ) : daySets.length === 0 ? (
-              <div className="text-zinc-500 text-sm">Workout logged but no sets found.</div>
-            ) : (
-              <div className="space-y-4 overflow-y-auto flex-1">
-                {Object.entries(groupedSets).map(([exercise, sets]) => (
-                  <div key={exercise}>
-                    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                      {exercise}
-                    </p>
-                    <div className="space-y-1">
-                      {sets.map((s, i) => (
-                        <div
-                          key={s.id}
-                          className="text-xs text-zinc-300 bg-zinc-800 rounded-lg px-3 py-2"
-                        >
-                          Set {i + 1}
-                          {s.weight_kg > 0 && ` · ${s.weight_kg} kg`}
-                          {s.reps > 0 && ` × ${s.reps} reps`}
-                          {s.distance > 0 && ` · ${s.distance} ${s.distance_unit || 'km'}`}
-                          {s.duration_seconds > 0 &&
-                            ` · ${Math.floor(s.duration_seconds / 60)}:${String(s.duration_seconds % 60).padStart(2, '0')}`}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

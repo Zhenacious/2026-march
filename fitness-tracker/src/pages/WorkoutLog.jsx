@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -70,7 +71,10 @@ function SetRow({ set, categoryMap, onDelete }) {
 
 export default function WorkoutLog() {
   const { user } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [searchParams] = useSearchParams();
+  const [selectedDate, setSelectedDate] = useState(
+    searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
+  );
   const [exercises, setExercises] = useState([]);
   const [sets, setSets] = useState([]);
   const [loading, setLoading] = useState(false);
