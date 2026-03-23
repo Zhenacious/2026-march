@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, Search, Dumbbell, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Search, Dumbbell, Sparkles, Pencil, Check, X } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
@@ -41,6 +41,10 @@ export default function Exercises() {
   const [showForm, setShowForm] = useState(false);
   const [categorizing, setCategorizing] = useState(false);
   const [categorizeStatus, setCategorizeStatus] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [saving, setSaving] = useState(false);
 
   async function fetchExercises() {
     try {
@@ -98,6 +102,40 @@ export default function Exercises() {
       setExercises((prev) => prev.filter((e) => e.id !== id));
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  function startEdit(ex) {
+    setEditingId(ex.id);
+    setEditName(ex.name);
+    setEditCategory(ex.category || '');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName('');
+    setEditCategory('');
+  }
+
+  async function handleSaveEdit(id) {
+    if (!editName.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const { error: err } = await supabase
+        .from('exercises')
+        .update({ name: editName.trim(), category: editCategory })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (err) throw err;
+      setExercises((prev) =>
+        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: editCategory } : ex)
+      );
+      cancelEdit();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -333,18 +371,59 @@ export default function Exercises() {
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden divide-y divide-zinc-800">
                   {grouped[cat].map((ex) => (
-                    <div
-                      key={ex.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
-                      <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
-                      <button
-                        onClick={() => handleDelete(ex.id)}
-                        className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div key={ex.id} className="px-4 py-3 hover:bg-zinc-800/50 transition-colors">
+                      {editingId === ex.id ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(ex.id); if (e.key === 'Escape') cancelEdit(); }}
+                            className="flex-1 min-w-0 bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          />
+                          <select
+                            value={editCategory}
+                            onChange={(e) => setEditCategory(e.target.value)}
+                            className="bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          >
+                            <option value="">Uncategorized</option>
+                            {CATEGORY_OPTIONS.map((c) => (
+                              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleSaveEdit(ex.id)}
+                            disabled={saving}
+                            className="text-green-400 hover:text-green-300 p-1 rounded transition-colors"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="text-zinc-500 hover:text-zinc-200 p-1 rounded transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
+                          <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
+                          <button
+                            onClick={() => startEdit(ex)}
+                            className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(ex.id)}
+                            className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

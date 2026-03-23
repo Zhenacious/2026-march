@@ -48,6 +48,7 @@ export default function Progress() {
   const [exercises, setExercises] = useState([]);      // [{ name, category }]
   const [selectedExercise, setSelectedExercise] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
+  const [timeScale, setTimeScale] = useState('all');
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -106,17 +107,18 @@ export default function Progress() {
     setError('');
 
     try {
-      const { data: workouts, error: wErr } = await supabase
-        .from('workouts')
-        .select('id, date')
-        .eq('user_id', user.id)
-        .order('date');
+      // Apply time scale cutoff
+      const now = new Date();
+      let cutoff = null;
+      if (timeScale === 'year') { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
+      if (timeScale === 'month') { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 1); }
 
+      let query = supabase.from('workouts').select('id, date').eq('user_id', user.id).order('date');
+      if (cutoff) query = query.gte('date', format(cutoff, 'yyyy-MM-dd'));
+
+      const { data: workouts, error: wErr } = await query;
       if (wErr) throw wErr;
-      if (!workouts || workouts.length === 0) {
-        setChartData([]);
-        return;
-      }
+      if (!workouts || workouts.length === 0) { setChartData([]); return; }
 
       const workoutIds = workouts.map((w) => w.id);
       const workoutMap = {};
@@ -129,25 +131,26 @@ export default function Progress() {
         .eq('exercise_name', selectedExercise);
 
       if (sErr) throw sErr;
-      if (!sets || sets.length === 0) {
-        setChartData([]);
-        return;
-      }
+      if (!sets || sets.length === 0) { setChartData([]); return; }
 
       const byDate = {};
       sets.forEach((s) => {
         const date = workoutMap[s.workout_id];
         if (!date) return;
-        if (!byDate[date]) byDate[date] = { maxWeight: 0, totalVolume: 0 };
-        if (s.weight_kg > byDate[date].maxWeight) byDate[date].maxWeight = s.weight_kg;
+        // Epley formula: e1RM = weight × (1 + reps / 30)
+        const e1rm = (s.reps || 0) > 0
+          ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
+          : (s.weight_kg || 0);
+        if (!byDate[date]) byDate[date] = { maxE1RM: 0, totalVolume: 0 };
+        if (e1rm > byDate[date].maxE1RM) byDate[date].maxE1RM = e1rm;
         byDate[date].totalVolume += (s.weight_kg || 0) * (s.reps || 0);
       });
 
       const data = Object.entries(byDate)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, vals]) => ({
-          date: format(parseISO(date), 'MMM d'),
-          'Max Weight (kg)': vals.maxWeight,
+          date: format(parseISO(date), timeScale === 'month' ? 'MMM d' : 'MMM d yy'),
+          'Est. 1RM (kg)': vals.maxE1RM,
           'Total Volume (kg)': Math.round(vals.totalVolume),
         }));
 
@@ -157,7 +160,7 @@ export default function Progress() {
     } finally {
       setLoading(false);
     }
-  }, [user, selectedExercise]);
+  }, [user, selectedExercise, timeScale]);
 
   useEffect(() => {
     fetchChartData();
@@ -173,6 +176,23 @@ export default function Progress() {
           {error}
         </div>
       )}
+
+      {/* Time scale */}
+      <div className="flex gap-1.5 mb-6">
+        {[{ label: 'All Time', value: 'all' }, { label: '1 Year', value: 'year' }, { label: '1 Month', value: 'month' }].map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setTimeScale(t.value)}
+            className={`text-xs px-4 py-2 rounded-lg border font-medium transition-colors ${
+              timeScale === t.value
+                ? 'bg-violet-600 text-white border-violet-600'
+                : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
         {/* Muscle group tabs */}
@@ -227,7 +247,11 @@ export default function Progress() {
       ) : (
         <div className="space-y-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <h2 className="text-zinc-100 font-semibold mb-5">Max Weight per Session</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-zinc-100 font-semibold">Estimated 1 Rep Max</h2>
+              <span className="text-zinc-500 text-xs">Epley formula: weight × (1 + reps/30)</span>
+            </div>
+            <p className="text-zinc-500 text-xs mb-5">Best set per session</p>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
@@ -246,7 +270,7 @@ export default function Progress() {
                 <Tooltip content={<CustomTooltip />} />
                 <Line
                   type="monotone"
-                  dataKey="Max Weight (kg)"
+                  dataKey="Est. 1RM (kg)"
                   stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={{ fill: '#8b5cf6', r: 3 }}
