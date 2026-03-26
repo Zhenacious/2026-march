@@ -1,5 +1,12 @@
 # FitTrack — Claude Code Guidelines
 
+## About the User
+
+- **Complete beginner to coding** — no assumed knowledge.
+- Always explain what you are doing and why as you go, in plain English.
+- Avoid jargon without explanation. If a technical term is necessary, define it briefly.
+- Keep explanations concise but clear — don't overwhelm, but don't skip the "why".
+
 ## Commit Reminders
 
 - **After finishing a working feature**, suggest a git commit with a clear description.
