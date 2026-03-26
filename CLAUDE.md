@@ -7,11 +7,13 @@
 - Avoid jargon without explanation. If a technical term is necessary, define it briefly.
 - Keep explanations concise but clear — don't overwhelm, but don't skip the "why".
 
-## Commit Reminders
+## Git — Commit and Push Automatically
 
-- **After finishing a working feature**, suggest a git commit with a clear description.
-- **Before making any large or risky change** (refactors, deleting files, restructuring), suggest committing the current state first as a save point.
-- Keep commit messages descriptive: say what changed and why, not just "update files".
+- **After finishing any working feature or change**, automatically commit and push to GitHub without waiting to be asked.
+- Do **not** ask for permission first — just commit and push when the work is done.
+- Before any large or risky change (refactors, deleting files, restructuring), commit the current state first as a save point, then proceed.
+- Commit messages must be descriptive: say what changed and why, not just "update files".
+- Always push to `origin master` after committing so the live site (auto-deployed from GitHub) stays up to date.
 
 ## Project Overview
 
