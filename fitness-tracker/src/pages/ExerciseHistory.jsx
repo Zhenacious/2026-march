@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -199,6 +199,24 @@ export default function ExerciseHistory() {
     { value: 'superset', label: 'Super' },
   ];
 
+  const prs = useMemo(() => {
+    if (!sessions.length) return null;
+    let bestE1RM = { value: 0, weight: 0, reps: 0, date: null };
+    let best1RM = { value: 0, date: null };
+    sessions.forEach(({ date, sets }) => {
+      sets.forEach((s) => {
+        const w = s.weight_kg || 0;
+        const r = s.reps || 0;
+        if (w > 0 && r > 0) {
+          const e1rm = Math.round(w * (1 + r / 30) * 10) / 10;
+          if (e1rm > bestE1RM.value) bestE1RM = { value: e1rm, weight: w, reps: r, date };
+        }
+        if (r === 1 && w > best1RM.value) best1RM = { value: w, date };
+      });
+    });
+    return { e1rm: bestE1RM, actual1rm: best1RM };
+  }, [sessions]);
+
   const color = exercise ? CATEGORY_COLORS[(exercise.category || '').toLowerCase()] : null;
 
   return (
@@ -237,6 +255,55 @@ export default function ExerciseHistory() {
         </div>
       ) : (
         <>
+          {/* Personal Records */}
+          {prs && (
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {/* Best e1RM */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Best e1RM</span>
+                </div>
+                {prs.e1rm.value > 0 ? (
+                  <>
+                    <p className="text-amber-400 text-2xl font-bold leading-none mb-1">
+                      {prs.e1rm.value}<span className="text-sm font-normal text-zinc-500 ml-1">kg</span>
+                    </p>
+                    <p className="text-zinc-400 text-xs mb-1">
+                      {prs.e1rm.weight} kg × {prs.e1rm.reps} reps
+                    </p>
+                    <p className="text-zinc-600 text-xs">
+                      {format(parseISO(prs.e1rm.date), 'MMM d, yyyy')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-zinc-600 text-sm">No data yet</p>
+                )}
+              </div>
+
+              {/* Best actual 1RM */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Trophy className="w-3.5 h-3.5 text-violet-400" />
+                  <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Best 1RM</span>
+                </div>
+                {prs.actual1rm.value > 0 ? (
+                  <>
+                    <p className="text-violet-400 text-2xl font-bold leading-none mb-1">
+                      {prs.actual1rm.value}<span className="text-sm font-normal text-zinc-500 ml-1">kg</span>
+                    </p>
+                    <p className="text-zinc-400 text-xs mb-1">1 rep</p>
+                    <p className="text-zinc-600 text-xs">
+                      {format(parseISO(prs.actual1rm.date), 'MMM d, yyyy')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-zinc-600 text-sm">No 1-rep sets logged</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* e1RM chart */}
           {chartData.length > 1 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
