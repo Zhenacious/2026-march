@@ -2,8 +2,11 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, ChevronDown, ChevronUp, List, Layers, Pencil, Check, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Trash2, ChevronDown, ChevronUp, List, Layers, Pencil, Check, X, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import {
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths,
+} from 'date-fns';
 import ExercisePicker from '../components/ExercisePicker';
 
 const CATEGORY_COLORS = {
@@ -138,6 +141,14 @@ export default function WorkoutLog() {
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({});
 
+  // Date calendar popup
+  const [showDateCal, setShowDateCal] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date(selectedDate + 'T00:00:00');
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [calDots, setCalDots] = useState({});
+
   const categoryMap = useMemo(
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
     [exercises]
@@ -177,6 +188,36 @@ export default function WorkoutLog() {
 
   useEffect(() => { if (user) fetchExercises(); }, [user]);
   useEffect(() => { fetchSets(); }, [fetchSets]);
+
+  // Fetch which muscle groups were trained on each day of the visible calendar month
+  useEffect(() => {
+    if (!user || !showDateCal) return;
+    async function fetchCalDots() {
+      const start = format(startOfMonth(calMonth), 'yyyy-MM-dd');
+      const end = format(endOfMonth(calMonth), 'yyyy-MM-dd');
+      const { data: workouts } = await supabase
+        .from('workouts').select('id, date')
+        .eq('user_id', user.id).gte('date', start).lte('date', end);
+      if (!workouts?.length) { setCalDots({}); return; }
+      const idToDate = Object.fromEntries(workouts.map((w) => [w.id, w.date]));
+      const { data: sets } = await supabase
+        .from('workout_sets').select('workout_id, exercise_name')
+        .in('workout_id', workouts.map((w) => w.id));
+      const dots = {};
+      (sets || []).forEach((s) => {
+        const date = idToDate[s.workout_id];
+        if (!date) return;
+        const cat = (categoryMap[s.exercise_name.toLowerCase()] || '').toLowerCase();
+        if (!cat || !CATEGORY_COLORS[cat]) return;
+        if (!dots[date]) dots[date] = new Set();
+        dots[date].add(cat);
+      });
+      const result = {};
+      Object.entries(dots).forEach(([date, cats]) => { result[date] = [...cats]; });
+      setCalDots(result);
+    }
+    fetchCalDots();
+  }, [user, showDateCal, calMonth, categoryMap]);
 
   function fillFromRecent(exerciseName) {
     const last = exerciseLastSet[exerciseName];
@@ -332,11 +373,108 @@ export default function WorkoutLog() {
       <h1 className="text-2xl font-bold text-zinc-100 mb-1">Workout Log</h1>
       <p className="text-zinc-400 text-sm mb-6">Log your sets for any day</p>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
+      {/* Date picker with mini calendar popup */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6 relative">
         <label className="block text-xs font-medium text-zinc-400 mb-1">Date</label>
-        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-        />
+        <button
+          type="button"
+          onClick={() => {
+            const d = new Date(selectedDate + 'T00:00:00');
+            setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+            setShowDateCal(true);
+          }}
+          className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm transition-colors"
+        >
+          <CalendarDays className="w-4 h-4 text-zinc-400" />
+          {format(new Date(selectedDate + 'T00:00:00'), 'EEEE, MMMM d, yyyy')}
+        </button>
+
+        {showDateCal && (
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 z-40" onClick={() => setShowDateCal(false)} />
+            {/* Calendar popup */}
+            <div className="absolute left-0 top-full mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 w-72">
+              {/* Month nav */}
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  type="button"
+                  onClick={() => setCalMonth(subMonths(calMonth, 1))}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-zinc-100 text-sm font-semibold">
+                  {format(calMonth, 'MMMM yyyy')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCalMonth(addMonths(calMonth, 1))}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Day headers */}
+              <div className="grid grid-cols-7 mb-1">
+                {['S','M','T','W','T','F','S'].map((d, i) => (
+                  <div key={i} className="text-center text-xs text-zinc-600 py-1">{d}</div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div className="grid grid-cols-7 gap-y-1">
+                {eachDayOfInterval({
+                  start: startOfWeek(startOfMonth(calMonth), { weekStartsOn: 0 }),
+                  end: endOfWeek(endOfMonth(calMonth), { weekStartsOn: 0 }),
+                }).map((day) => {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  const inMonth = isSameMonth(day, calMonth);
+                  const selected = dateStr === selectedDate;
+                  const today = isToday(day);
+                  const dots = calDots[dateStr] || [];
+                  return (
+                    <button
+                      key={dateStr}
+                      type="button"
+                      onClick={() => { setSelectedDate(dateStr); setShowDateCal(false); }}
+                      className={`flex flex-col items-center justify-start pt-1 pb-1 rounded-lg transition-colors h-10 ${
+                        !inMonth ? 'opacity-25 pointer-events-none' : ''
+                      } ${
+                        selected ? 'bg-violet-600 text-white' :
+                        today ? 'ring-1 ring-violet-500 text-zinc-100 hover:bg-zinc-800' :
+                        'text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span className="text-xs font-medium leading-none mb-0.5">{format(day, 'd')}</span>
+                      {dots.length > 0 && (
+                        <div className="flex gap-0.5 flex-wrap justify-center">
+                          {dots.slice(0, 4).map((cat) => (
+                            <span
+                              key={cat}
+                              className={`w-1 h-1 rounded-full ${CATEGORY_COLORS[cat]?.dot || 'bg-zinc-500'}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-3 gap-y-1">
+                {Object.entries(CATEGORY_COLORS).map(([cat, c]) => (
+                  <div key={cat} className="flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                    <span className="text-zinc-500 text-xs capitalize">{cat}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {error && <div className="bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
