@@ -79,7 +79,9 @@ function SetRow({
           )}
         </div>
         <p className="text-zinc-500 text-xs mt-0.5">
-          {set.weight_kg > 0 && `${set.weight_kg} kg`}
+          {(set.weight_kg || 0) === 0 && (set.reps || 0) > 0
+            ? <span className="text-teal-400 font-medium">BW</span>
+            : set.weight_kg > 0 ? `${set.weight_kg} kg` : null}
           {set.weight_kg > 0 && set.reps > 0 && ' × '}
           {set.reps > 0 && `${set.reps} reps`}
           {set.distance > 0 && ` · ${set.distance} ${set.distance_unit || 'km'}`}

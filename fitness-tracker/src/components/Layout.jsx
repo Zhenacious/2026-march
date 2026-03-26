@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  Scale,
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/exercises', label: 'Exercises', icon: Library },
   { to: '/calendar', label: 'Calendar', icon: Calendar },
   { to: '/progress', label: 'Progress', icon: TrendingUp },
+  { to: '/body-weight', label: 'Body Weight', icon: Scale },
   { to: '/import', label: 'Import', icon: Upload },
 ];
 

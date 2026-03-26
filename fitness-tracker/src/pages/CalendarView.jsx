@@ -17,11 +17,33 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, X, ArrowRight } from 'lucide-react';
 
+const CATEGORY_COLORS = {
+  chest:     'bg-rose-500',
+  back:      'bg-blue-500',
+  abs:       'bg-amber-400',
+  legs:      'bg-green-500',
+  triceps:   'bg-orange-500',
+  biceps:    'bg-violet-500',
+  shoulders: 'bg-sky-500',
+  mobility:  'bg-teal-500',
+};
+
+const LEGEND_ITEMS = [
+  { label: 'Chest',     color: 'bg-rose-500' },
+  { label: 'Back',      color: 'bg-blue-500' },
+  { label: 'Legs',      color: 'bg-green-500' },
+  { label: 'Shoulders', color: 'bg-sky-500' },
+  { label: 'Arms',      color: 'bg-orange-500' },
+  { label: 'Abs',       color: 'bg-amber-400' },
+  { label: 'Mobility',  color: 'bg-teal-500' },
+];
+
 export default function CalendarView() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workoutDates, setWorkoutDates] = useState({});
+  const [calDots, setCalDots] = useState({});   // { [dateStr]: string[] } — deduplicated dot classes
   const [selectedDay, setSelectedDay] = useState(null);
   const [daySets, setDaySets] = useState([]);
   const [loadingDay, setLoadingDay] = useState(false);
@@ -33,7 +55,7 @@ export default function CalendarView() {
     const end = format(endOfMonth(currentDate), 'yyyy-MM-dd');
 
     try {
-      const { data, error: err } = await supabase
+      const { data: workouts, error: err } = await supabase
         .from('workouts')
         .select('id, date')
         .eq('user_id', user.id)
@@ -43,8 +65,50 @@ export default function CalendarView() {
       if (err) throw err;
 
       const dateMap = {};
-      (data || []).forEach((w) => { dateMap[w.date] = w.id; });
+      (workouts || []).forEach((w) => { dateMap[w.date] = w.id; });
       setWorkoutDates(dateMap);
+
+      if (!workouts || workouts.length === 0) { setCalDots({}); return; }
+
+      // Fetch sets for these workouts to get exercise names
+      const ids = workouts.map((w) => w.id);
+      const idToDate = {};
+      workouts.forEach((w) => { idToDate[w.id] = w.date; });
+
+      const { data: sets } = await supabase
+        .from('workout_sets')
+        .select('workout_id, exercise_name')
+        .in('workout_id', ids);
+
+      if (!sets || sets.length === 0) { setCalDots({}); return; }
+
+      // Fetch categories for all exercise names that appear this month
+      const exerciseNames = [...new Set(sets.map((s) => s.exercise_name))];
+      const { data: exData } = await supabase
+        .from('exercises')
+        .select('name, category')
+        .eq('user_id', user.id)
+        .in('name', exerciseNames);
+
+      const categoryMap = {};
+      (exData || []).forEach((ex) => { categoryMap[ex.name] = (ex.category || '').toLowerCase(); });
+
+      // Build dots map: { [dateStr]: [dotClass, ...] } — at most one dot per category
+      const dots = {};
+      sets.forEach((s) => {
+        const date = idToDate[s.workout_id];
+        if (!date) return;
+        const cat = categoryMap[s.exercise_name];
+        const dotClass = cat && CATEGORY_COLORS[cat];
+        if (!dotClass) return;
+        if (!dots[date]) dots[date] = new Set();
+        dots[date].add(dotClass);
+      });
+
+      // Convert Sets to arrays
+      const dotsArr = {};
+      Object.entries(dots).forEach(([d, s]) => { dotsArr[d] = [...s]; });
+      setCalDots(dotsArr);
     } catch (err) {
       setError(err.message);
     }
@@ -134,6 +198,7 @@ export default function CalendarView() {
             {calDays.map((day) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const hasWorkout = !!workoutDates[dateStr];
+              const dots = calDots[dateStr] || [];
               const inMonth = isSameMonth(day, currentDate);
               const selected = selectedDay && isSameDay(day, selectedDay);
               const today = isToday(day);
@@ -143,7 +208,7 @@ export default function CalendarView() {
                   key={dateStr}
                   onClick={() => handleDayClick(day)}
                   className={`
-                    aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors relative
+                    aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors relative pb-3
                     ${!inMonth ? 'opacity-25' : ''}
                     ${selected ? 'bg-violet-600 text-white' : hasWorkout ? 'bg-violet-950 hover:bg-violet-900 text-violet-200' : 'hover:bg-zinc-800 text-zinc-300'}
                     ${today && !selected ? 'ring-1 ring-violet-500' : ''}
@@ -151,22 +216,31 @@ export default function CalendarView() {
                 >
                   <span className="text-xs font-medium">{format(day, 'd')}</span>
                   {hasWorkout && !selected && (
-                    <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-violet-400" />
+                    <div className="absolute bottom-1 flex gap-0.5 items-center">
+                      {dots.length > 0
+                        ? dots.slice(0, 4).map((cls, i) => (
+                            <span key={i} className={`w-1 h-1 rounded-full ${cls}`} />
+                          ))
+                        : <span className="w-1 h-1 rounded-full bg-violet-400" />
+                      }
+                    </div>
                   )}
                 </button>
               );
             })}
           </div>
 
-          <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-violet-950 border border-violet-800" />
-              Workout logged
-            </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded ring-1 ring-violet-500 bg-zinc-900" />
               Today
             </div>
+            {LEGEND_ITEMS.map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${color}`} />
+                {label}
+              </div>
+            ))}
           </div>
         </div>
 

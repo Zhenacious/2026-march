@@ -14,6 +14,7 @@ import {
   Legend,
 } from 'recharts';
 import { TrendingUp, Star } from 'lucide-react';
+import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -53,6 +54,7 @@ export default function Progress() {
   );
   const [timeScale, setTimeScale] = useState('all');
   const [chartData, setChartData] = useState([]);
+  const [bodyWeights] = useState(() => loadBodyWeights());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -142,13 +144,13 @@ export default function Progress() {
       sets.forEach((s) => {
         const date = workoutMap[s.workout_id];
         if (!date) return;
-        // Epley formula: e1RM = weight × (1 + reps / 30)
+        const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
         const e1rm = (s.reps || 0) > 0
-          ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
-          : (s.weight_kg || 0);
+          ? Math.round(effW * (1 + (s.reps || 0) / 30) * 10) / 10
+          : effW;
         if (!byDate[date]) byDate[date] = { maxE1RM: 0, totalVolume: 0 };
         if (e1rm > byDate[date].maxE1RM) byDate[date].maxE1RM = e1rm;
-        byDate[date].totalVolume += (s.weight_kg || 0) * (s.reps || 0);
+        byDate[date].totalVolume += effW * (s.reps || 0);
       });
 
       const data = Object.entries(byDate)
@@ -165,7 +167,7 @@ export default function Progress() {
     } finally {
       setLoading(false);
     }
-  }, [user, selectedExercise, timeScale]);
+  }, [user, selectedExercise, timeScale, bodyWeights]);
 
   useEffect(() => {
     fetchChartData();

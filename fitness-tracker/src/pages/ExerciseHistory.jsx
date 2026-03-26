@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy } from 'lucide-react';
+import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -46,6 +47,7 @@ export default function ExerciseHistory() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [bodyWeights] = useState(() => loadBodyWeights());
 
   // Inline edit state (sets)
   const [editingSetId, setEditingSetId] = useState(null);
@@ -63,11 +65,12 @@ export default function ExerciseHistory() {
   function buildChartFromSessions(sessionList) {
     const ascending = [...sessionList].reverse();
     return ascending.map(({ date, sets }) => {
-      const maxE1RM = Math.max(...sets.map((s) =>
-        (s.reps || 0) > 0
-          ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
-          : (s.weight_kg || 0)
-      ));
+      const maxE1RM = Math.max(...sets.map((s) => {
+        const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
+        return (s.reps || 0) > 0
+          ? Math.round(effW * (1 + (s.reps || 0) / 30) * 10) / 10
+          : effW;
+      }));
       return { date: format(parseISO(date), 'MMM d yy'), 'Est. 1RM': maxE1RM };
     });
   }
@@ -243,17 +246,17 @@ export default function ExerciseHistory() {
     let best1RM = { value: 0, date: null };
     sessions.forEach(({ date, sets }) => {
       sets.forEach((s) => {
-        const w = s.weight_kg || 0;
+        const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
         const r = s.reps || 0;
-        if (w > 0 && r > 0) {
-          const e1rm = Math.round(w * (1 + r / 30) * 10) / 10;
-          if (e1rm > bestE1RM.value) bestE1RM = { value: e1rm, weight: w, reps: r, date };
+        if (effW > 0 && r > 0) {
+          const e1rm = Math.round(effW * (1 + r / 30) * 10) / 10;
+          if (e1rm > bestE1RM.value) bestE1RM = { value: e1rm, weight: effW, reps: r, date };
         }
-        if (r === 1 && w > best1RM.value) best1RM = { value: w, date };
+        if (r === 1 && effW > best1RM.value) best1RM = { value: effW, date };
       });
     });
     return { e1rm: bestE1RM, actual1rm: best1RM };
-  }, [sessions]);
+  }, [sessions, bodyWeights]);
 
   const color = exercise ? CATEGORY_COLORS[(exercise.category || '').toLowerCase()] : null;
 

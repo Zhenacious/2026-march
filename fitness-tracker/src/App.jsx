@@ -10,6 +10,7 @@ import CalendarView from './pages/CalendarView';
 import Progress from './pages/Progress';
 import Import from './pages/Import';
 import ExerciseHistory from './pages/ExerciseHistory';
+import BodyWeightTracker from './pages/BodyWeightTracker';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/calendar" element={<CalendarView />} />
         <Route path="/progress" element={<Progress />} />
         <Route path="/import" element={<Import />} />
+        <Route path="/body-weight" element={<BodyWeightTracker />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
