@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, TrendingUp } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -46,6 +46,23 @@ export default function ExerciseHistory() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Inline edit state
+  const [editingSetId, setEditingSetId] = useState(null);
+  const [editValues, setEditValues] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  function buildChartFromSessions(sessionList) {
+    const ascending = [...sessionList].reverse();
+    return ascending.map(({ date, sets }) => {
+      const maxE1RM = Math.max(...sets.map((s) =>
+        (s.reps || 0) > 0
+          ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
+          : (s.weight_kg || 0)
+      ));
+      return { date: format(parseISO(date), 'MMM d yy'), 'Est. 1RM': maxE1RM };
+    });
+  }
 
   useEffect(() => {
     async function fetchHistory() {
@@ -100,18 +117,7 @@ export default function ExerciseHistory() {
           .map(([date, dateSets]) => ({ date, sets: dateSets }));
         setSessions(sorted);
 
-        // Chart: e1RM per session (ascending for chart)
-        const chart = Object.entries(byDate)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, dateSets]) => {
-            const maxE1RM = Math.max(...dateSets.map((s) =>
-              (s.reps || 0) > 0
-                ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
-                : (s.weight_kg || 0)
-            ));
-            return { date: format(parseISO(date), 'MMM d yy'), 'Est. 1RM': maxE1RM };
-          });
-        setChartData(chart);
+        setChartData(buildChartFromSessions(sorted));
       } catch (err) {
         setError(err.message);
       } finally {
@@ -120,6 +126,78 @@ export default function ExerciseHistory() {
     }
     fetchHistory();
   }, [user, exerciseName]);
+
+  function startEdit(s) {
+    setEditingSetId(s.id);
+    setEditValues({
+      weight_kg: s.weight_kg > 0 ? String(s.weight_kg) : '',
+      reps: s.reps > 0 ? String(s.reps) : '',
+      distance: s.distance > 0 ? String(s.distance) : '',
+      distance_unit: s.distance_unit || 'km',
+      duration_min: s.duration_seconds > 0 ? String(Math.floor(s.duration_seconds / 60)) : '',
+      duration_sec: s.duration_seconds > 0 ? String(s.duration_seconds % 60) : '',
+      set_type: s.set_type || 'normal',
+    });
+  }
+
+  function cancelEdit() {
+    setEditingSetId(null);
+    setEditValues({});
+  }
+
+  async function saveEdit(setId) {
+    setSaving(true);
+    const duration_seconds =
+      (parseInt(editValues.duration_min, 10) || 0) * 60 +
+      (parseInt(editValues.duration_sec, 10) || 0);
+    const updates = {
+      weight_kg: parseFloat(editValues.weight_kg) || 0,
+      reps: parseInt(editValues.reps, 10) || 0,
+      distance: parseFloat(editValues.distance) || 0,
+      distance_unit: editValues.distance_unit || '',
+      duration_seconds,
+      set_type: editValues.set_type,
+    };
+    try {
+      const { error: err } = await supabase.from('workout_sets').update(updates).eq('id', setId);
+      if (err) throw err;
+      const updated = sessions.map((sess) => ({
+        ...sess,
+        sets: sess.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
+      }));
+      setSessions(updated);
+      setChartData(buildChartFromSessions(updated));
+      cancelEdit();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteSet(setId, date) {
+    try {
+      const { error: err } = await supabase.from('workout_sets').delete().eq('id', setId);
+      if (err) throw err;
+      const updated = sessions
+        .map((sess) =>
+          sess.date === date
+            ? { ...sess, sets: sess.sets.filter((s) => s.id !== setId) }
+            : sess
+        )
+        .filter((sess) => sess.sets.length > 0);
+      setSessions(updated);
+      setChartData(buildChartFromSessions(updated));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const SET_TYPE_OPTIONS = [
+    { value: 'normal', label: 'Normal' },
+    { value: 'dropset', label: 'Drop' },
+    { value: 'superset', label: 'Super' },
+  ];
 
   const color = exercise ? CATEGORY_COLORS[(exercise.category || '').toLowerCase()] : null;
 
@@ -206,41 +284,128 @@ export default function ExerciseHistory() {
                     </div>
                   </div>
                   <div className="divide-y divide-zinc-800">
-                    {sets.map((s, i) => (
-                      <div key={s.id} className="flex items-center gap-3 px-5 py-2.5">
-                        <span className="text-zinc-600 text-xs w-10">Set {i + 1}</span>
-                        <div className="flex items-center gap-2 flex-wrap flex-1">
-                          {s.weight_kg > 0 && (
-                            <span className="text-zinc-200 text-sm font-medium">{s.weight_kg} kg</span>
-                          )}
-                          {s.reps > 0 && (
-                            <span className="text-zinc-400 text-sm">× {s.reps} reps</span>
-                          )}
-                          {s.distance > 0 && (
-                            <span className="text-zinc-400 text-sm">{s.distance} {s.distance_unit || 'km'}</span>
-                          )}
-                          {s.duration_seconds > 0 && (
-                            <span className="text-zinc-400 text-sm">
-                              {Math.floor(s.duration_seconds / 60)}:{String(s.duration_seconds % 60).padStart(2, '0')}
-                            </span>
-                          )}
+                    {sets.map((s, i) => {
+                      if (editingSetId === s.id) {
+                        return (
+                          <div key={s.id} className="px-5 py-3 bg-zinc-800/80 border-l-2 border-violet-500">
+                            <p className="text-zinc-500 text-xs mb-2">Set {i + 1}</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-0.5">Weight (kg)</label>
+                                <input type="number" value={editValues.weight_kg} min="0" step="0.5"
+                                  onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
+                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-0.5">Reps</label>
+                                <input type="number" value={editValues.reps} min="0"
+                                  onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
+                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-0.5">Distance</label>
+                                <div className="flex gap-1">
+                                  <input type="number" value={editValues.distance} min="0" step="0.1"
+                                    onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  />
+                                  <select value={editValues.distance_unit}
+                                    onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
+                                    className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  >
+                                    <option value="km">km</option>
+                                    <option value="mi">mi</option>
+                                    <option value="m">m</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-0.5">Duration</label>
+                                <div className="flex gap-1 items-center">
+                                  <input type="number" value={editValues.duration_min} min="0" placeholder="min"
+                                    onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  />
+                                  <span className="text-zinc-500 text-xs">:</span>
+                                  <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
+                                    onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {SET_TYPE_OPTIONS.map((opt) => (
+                                <button key={opt.value} type="button"
+                                  onClick={() => setEditValues((p) => ({ ...p, set_type: opt.value }))}
+                                  className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                    editValues.set_type === opt.value
+                                      ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
+                                      : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
+                                      : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
+                                      : 'bg-zinc-700 text-zinc-400 border-zinc-600'
+                                  }`}
+                                >{opt.label}</button>
+                              ))}
+                              <div className="flex items-center gap-1 ml-auto">
+                                <button onClick={() => saveEdit(s.id)} disabled={saving}
+                                  className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button onClick={cancelEdit}
+                                  className="text-zinc-500 hover:text-zinc-200 p-1.5 rounded transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={s.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-zinc-800/40 transition-colors group">
+                          <span className="text-zinc-600 text-xs w-10 flex-shrink-0">Set {i + 1}</span>
+                          <div className="flex items-center gap-2 flex-wrap flex-1">
+                            {s.weight_kg > 0 && (
+                              <span className="text-zinc-200 text-sm font-medium">{s.weight_kg} kg</span>
+                            )}
+                            {s.reps > 0 && (
+                              <span className="text-zinc-400 text-sm">× {s.reps} reps</span>
+                            )}
+                            {s.distance > 0 && (
+                              <span className="text-zinc-400 text-sm">{s.distance} {s.distance_unit || 'km'}</span>
+                            )}
+                            {s.duration_seconds > 0 && (
+                              <span className="text-zinc-400 text-sm">
+                                {Math.floor(s.duration_seconds / 60)}:{String(s.duration_seconds % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                            {s.set_type === 'dropset' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40">Drop</span>
+                            )}
+                            {s.set_type === 'superset' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40">Super</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => startEdit(s)}
+                              className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteSet(s.id, date)}
+                              className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {s.set_type === 'dropset' && (
-                            <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40">Drop</span>
-                          )}
-                          {s.set_type === 'superset' && (
-                            <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40">Super</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => navigate(`/workouts?date=${date}`)}
-                          className="text-zinc-600 hover:text-violet-400 transition-colors text-xs ml-auto"
-                        >
-                          Open
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
