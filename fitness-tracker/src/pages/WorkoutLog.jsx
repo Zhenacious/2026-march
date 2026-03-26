@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, ChevronDown, ChevronUp, List, Layers, Pencil, Check, X, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Plus, Trash2, ChevronDown, ChevronUp, List, Layers, Pencil, Check, X, ChevronLeft, ChevronRight, CalendarDays, TrendingUp } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths,
@@ -34,21 +34,27 @@ const SET_TYPE_OPTIONS = [
 function SetRow({
   set, categoryMap, showExerciseName = true,
   canMoveUp, canMoveDown,
-  onMoveUp, onMoveDown, onDelete, onEditStart,
+  onMoveUp, onMoveDown, onDelete, onEditStart, onGoToExercise,
+  isTapped, onTap,
 }) {
   const category = categoryMap[set.exercise_name.toLowerCase()];
   const color = getCategoryColor(category);
+  // On desktop: show on hover. On mobile: show when this set is tapped.
+  const actionClass = isTapped ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
 
   return (
-    <div className="flex items-center gap-2 px-3 py-3 hover:bg-zinc-800/50 transition-colors group">
+    <div
+      onClick={() => onTap(set.id)}
+      className="flex items-center gap-2 px-3 py-3 hover:bg-zinc-800/50 transition-colors group cursor-pointer select-none"
+    >
       {/* Reorder buttons */}
       <div className="flex flex-col gap-0.5 flex-shrink-0">
-        <button onClick={onMoveUp} disabled={!canMoveUp}
+        <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={!canMoveUp}
           className="text-zinc-700 hover:text-zinc-400 disabled:opacity-0 transition-colors p-0.5 rounded"
         >
           <ChevronUp className="w-3 h-3" />
         </button>
-        <button onClick={onMoveDown} disabled={!canMoveDown}
+        <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={!canMoveDown}
           className="text-zinc-700 hover:text-zinc-400 disabled:opacity-0 transition-colors p-0.5 rounded"
         >
           <ChevronDown className="w-3 h-3" />
@@ -82,13 +88,22 @@ function SetRow({
         </p>
       </div>
 
-      <button onClick={onEditStart}
-        className="text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
+      {/* Action buttons: always visible on desktop hover, only visible on mobile when tapped */}
+      {showExerciseName && (
+        <button onClick={(e) => { e.stopPropagation(); onGoToExercise(set.exercise_name); }}
+          title="View exercise history"
+          className={`text-zinc-700 hover:text-blue-400 transition-colors p-1 rounded ${actionClass}`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <button onClick={(e) => { e.stopPropagation(); onEditStart(); }}
+        className={`text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded ${actionClass}`}
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
-      <button onClick={() => onDelete(set.id)}
-        className="text-zinc-700 hover:text-red-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
+      <button onClick={(e) => { e.stopPropagation(); onDelete(set.id); }}
+        className={`text-zinc-700 hover:text-red-400 transition-colors p-1 rounded ${actionClass}`}
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -109,6 +124,7 @@ const MUSCLE_GROUPS = [
 
 export default function WorkoutLog() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(
     searchParams.get('date') || format(new Date(), 'yyyy-MM-dd')
@@ -140,6 +156,9 @@ export default function WorkoutLog() {
   // Edit state
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({});
+
+  // Mobile tap-to-reveal actions
+  const [tappedSetId, setTappedSetId] = useState(null);
 
   // Date calendar popup
   const [showDateCal, setShowDateCal] = useState(false);
@@ -364,6 +383,9 @@ export default function WorkoutLog() {
         onMoveDown={() => handleReorder(set.id, orderedList, 'down')}
         onDelete={handleDeleteSet}
         onEditStart={() => startEdit(set)}
+        onGoToExercise={(name) => navigate(`/exercises/${encodeURIComponent(name)}`)}
+        isTapped={tappedSetId === set.id}
+        onTap={(id) => setTappedSetId((prev) => (prev === id ? null : id))}
       />
     );
   }
@@ -676,7 +698,12 @@ export default function WorkoutLog() {
                 <div key={name}>
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800/60">
                     {color && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />}
-                    <span className="text-zinc-100 text-sm font-semibold flex-1">{name}</span>
+                    <button
+                      onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`)}
+                      className="text-zinc-100 text-sm font-semibold flex-1 text-left hover:text-violet-400 transition-colors"
+                    >
+                      {name}
+                    </button>
                     <span className="text-zinc-500 text-xs">{exSets.length} set{exSets.length !== 1 ? 's' : ''}</span>
                     {totalVol > 0 && <span className="text-zinc-500 text-xs">{totalVol.toLocaleString()} kg vol</span>}
                     {color && <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge}`}>{color.label}</span>}

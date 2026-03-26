@@ -47,10 +47,18 @@ export default function ExerciseHistory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Inline edit state
+  // Inline edit state (sets)
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({});
   const [saving, setSaving] = useState(false);
+
+  // Exercise name/category edit state
+  const [editingExercise, setEditingExercise] = useState(false);
+  const [editExName, setEditExName] = useState('');
+  const [editExCategory, setEditExCategory] = useState('');
+  const [savingExercise, setSavingExercise] = useState(false);
+
+  const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
 
   function buildChartFromSessions(sessionList) {
     const ascending = [...sessionList].reverse();
@@ -126,6 +134,36 @@ export default function ExerciseHistory() {
     }
     fetchHistory();
   }, [user, exerciseName]);
+
+  async function saveExerciseEdit() {
+    if (!editExName.trim()) return;
+    setSavingExercise(true);
+    try {
+      const newName = editExName.trim();
+      const { error: err } = await supabase
+        .from('exercises')
+        .update({ name: newName, category: editExCategory })
+        .eq('user_id', user.id)
+        .eq('name', exerciseName);
+      if (err) throw err;
+      // If name changed, update all workout_sets referencing the old name
+      if (newName !== exerciseName) {
+        await supabase
+          .from('workout_sets')
+          .update({ exercise_name: newName })
+          .eq('exercise_name', exerciseName);
+        // Navigate to the new URL
+        navigate(`/exercises/${encodeURIComponent(newName)}`, { replace: true });
+        return;
+      }
+      setExercise((prev) => ({ ...prev, name: newName, category: editExCategory }));
+      setEditingExercise(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingExercise(false);
+    }
+  }
 
   function startEdit(s) {
     setEditingSetId(s.id);
@@ -230,15 +268,54 @@ export default function ExerciseHistory() {
         Back to Exercise Library
       </button>
 
-      <div className="flex items-center gap-3 mb-6">
-        {color && <span className={`w-3 h-3 rounded-full flex-shrink-0 ${color.dot}`} />}
-        <h1 className="text-2xl font-bold text-zinc-100">{exerciseName}</h1>
-        {exercise?.category && color && (
-          <span className={`text-xs px-2 py-0.5 rounded border font-medium ${color.badge}`}>
-            {exercise.category}
-          </span>
-        )}
-      </div>
+      {editingExercise ? (
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          <input
+            autoFocus
+            type="text"
+            value={editExName}
+            onChange={(e) => setEditExName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveExerciseEdit(); if (e.key === 'Escape') setEditingExercise(false); }}
+            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 flex-1 min-w-0"
+          />
+          <select
+            value={editExCategory}
+            onChange={(e) => setEditExCategory(e.target.value)}
+            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">Uncategorized</option>
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+            ))}
+          </select>
+          <button onClick={saveExerciseEdit} disabled={savingExercise}
+            className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors"
+          >
+            <Check className="w-5 h-5" />
+          </button>
+          <button onClick={() => setEditingExercise(false)}
+            className="text-zinc-500 hover:text-zinc-200 p-1.5 rounded transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 mb-6 group">
+          {color && <span className={`w-3 h-3 rounded-full flex-shrink-0 ${color.dot}`} />}
+          <h1 className="text-2xl font-bold text-zinc-100">{exercise?.name || exerciseName}</h1>
+          {exercise?.category && color && (
+            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${color.badge}`}>
+              {exercise.category}
+            </span>
+          )}
+          <button
+            onClick={() => { setEditExName(exercise?.name || exerciseName); setEditExCategory(exercise?.category || ''); setEditingExercise(true); }}
+            className="text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -340,9 +417,12 @@ export default function ExerciseHistory() {
                 <div key={date} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <div>
-                      <p className="text-zinc-100 font-semibold text-sm">
+                      <button
+                        onClick={() => navigate(`/workouts?date=${date}`)}
+                        className="text-zinc-100 font-semibold text-sm hover:text-violet-400 transition-colors text-left"
+                      >
                         {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
-                      </p>
+                      </button>
                       <p className="text-zinc-500 text-xs mt-0.5">{sets.length} set{sets.length !== 1 ? 's' : ''}</p>
                     </div>
                     <div className="text-right">
