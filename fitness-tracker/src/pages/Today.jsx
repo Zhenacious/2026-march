@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
-import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',   label: 'Chest' },
@@ -168,6 +168,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
 // ─── Main page ───────────────────────────────────────────────────────────────
 export default function Today() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // The date being viewed — defaults to today, can be changed via arrows
@@ -367,7 +368,7 @@ export default function Today() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto pb-[calc(10rem+env(safe-area-inset-bottom,0px))]">
+    <div className="max-w-6xl mx-auto pb-8">
 
       {/* ── Date navigation header ── */}
       <div className="px-4 pt-5 pb-4 flex items-center gap-2 max-w-lg mx-auto">
@@ -439,6 +440,15 @@ export default function Today() {
                     </button>
                   );
                 })}
+                {/* Add exercise button inline in the strip */}
+                <button
+                  type="button"
+                  onClick={() => { setShowSheet(true); setAddingTo(null); }}
+                  className="flex-shrink-0 md:w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold min-h-[48px] transition-colors border border-dashed border-zinc-700 text-zinc-500 hover:text-violet-400 hover:border-violet-500/50 hover:bg-violet-500/5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="md:inline hidden">Add exercise</span>
+                </button>
               </div>
             </aside>
           )}
@@ -446,13 +456,23 @@ export default function Today() {
           <div className="flex-1 min-w-0 max-w-lg mx-auto w-full">
             {/* Empty state */}
             {groupedExercises.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-600 gap-3 px-4">
-                <Dumbbell className="w-10 h-10 opacity-30" />
-                <p className="text-sm text-center leading-relaxed">
-                  {isToday
-                    ? <>Nothing logged yet.<br />Tap <span className="text-zinc-400 font-medium">Add Exercise</span> below to start.</>
-                    : 'No workout logged on this day.'}
+              <div className="flex flex-col items-center justify-center py-16 gap-4 px-4">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-800/80 flex items-center justify-center">
+                  <Dumbbell className="w-7 h-7 text-zinc-600" />
+                </div>
+                <p className="text-zinc-500 text-sm text-center leading-relaxed">
+                  {isToday ? 'Nothing logged yet.' : 'No workout on this day.'}
                 </p>
+                {isToday && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSheet(true)}
+                    className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold px-6 py-3.5 rounded-2xl text-sm transition-colors shadow-lg shadow-violet-900/30 min-h-[48px]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Exercise
+                  </button>
+                )}
               </div>
             )}
 
@@ -487,13 +507,22 @@ export default function Today() {
                   </span>
                 )}
                 <button
+                  onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`)}
+                  title="View exercise history"
+                  className="text-zinc-600 hover:text-violet-400 p-2 rounded-lg transition-colors flex-shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                </button>
+                <button
                   onClick={() => handleStartAdd(name)}
-                  className={`flex items-center gap-1 text-xs font-medium ml-1 transition-colors flex-shrink-0 ${
-                    isAdding ? 'text-zinc-500' : 'text-violet-400 hover:text-violet-300'
+                  className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 min-h-[32px] ${
+                    isAdding
+                      ? 'bg-zinc-800 text-zinc-500'
+                      : 'bg-violet-600/20 text-violet-400 hover:bg-violet-600/30'
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  set
+                  Set
                 </button>
               </div>
 
@@ -604,20 +633,6 @@ export default function Today() {
         </div>
       </div>
 
-      {/* Sticky "Add Exercise" — sits above the app bottom bar so Safari / PWA chrome stays predictable */}
-      <div
-        className="fixed left-0 right-0 px-4 py-3 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pointer-events-none z-[35]"
-        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
-      >
-        <button
-          type="button"
-          onClick={() => { setShowSheet(true); setAddingTo(null); }}
-          className="pointer-events-auto w-full max-w-lg mx-auto flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold py-4 min-h-[52px] rounded-2xl text-base transition-colors shadow-xl shadow-violet-900/30"
-        >
-          <Plus className="w-5 h-5" />
-          Add Exercise
-        </button>
-      </div>
 
       {showSheet && (
         <AddExerciseSheet
