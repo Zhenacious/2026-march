@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
@@ -188,6 +188,9 @@ export default function Today() {
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({ weightKg: '', reps: '', setType: 'normal' });
   const [saving, setSaving] = useState(false);
+  /** Which exercise row is “focused” — drives sidebar highlight and scroll-into-view after add. */
+  const [activeExercise, setActiveExercise] = useState(null);
+  const cardRefs = useRef({});
 
   const categoryMap = useMemo(
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
@@ -212,6 +215,18 @@ export default function Today() {
     return order.map((name) => ({ name, sets: map[name] }));
   }, [sets, addingTo]);
 
+  // After picking an exercise or tapping the sidebar, scroll its card into view (smooth, doesn’t resize the Safari window).
+  useEffect(() => {
+    if (!activeExercise) return;
+    const el = cardRefs.current[activeExercise];
+    if (el) {
+      const t = requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      return () => cancelAnimationFrame(t);
+    }
+  }, [activeExercise, selectedDate]);
+
   // Fetch exercise library once on login
   useEffect(() => {
     if (!user) return;
@@ -224,6 +239,7 @@ export default function Today() {
     if (!user) return;
     setLoading(true);
     setAddingTo(null);
+    setActiveExercise(null);
     setEditingSetId(null);
     setTappedSetId(null);
     supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle()
@@ -275,11 +291,13 @@ export default function Today() {
       setType: lastSet?.set_type || 'normal',
     });
     setAddingTo(name);
+    setActiveExercise(name);
     setEditingSetId(null);
     setTappedSetId(null);
   }
 
   function handleStartAdd(exerciseName) {
+    setActiveExercise(exerciseName);
     if (addingTo === exerciseName) { setAddingTo(null); return; }
     const lastSet = [...sets].reverse().find((s) => s.exercise_name === exerciseName);
     setAddForm({
@@ -349,10 +367,10 @@ export default function Today() {
   }
 
   return (
-    <div className="max-w-lg mx-auto pb-28">
+    <div className="max-w-6xl mx-auto pb-[calc(10rem+env(safe-area-inset-bottom,0px))]">
 
       {/* ── Date navigation header ── */}
-      <div className="px-4 pt-5 pb-4 flex items-center gap-2">
+      <div className="px-4 pt-5 pb-4 flex items-center gap-2 max-w-lg mx-auto">
         <button
           onClick={goToPrevDay}
           className="text-zinc-500 hover:text-zinc-200 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0"
@@ -374,7 +392,7 @@ export default function Today() {
 
       {/* "Back to today" link when browsing past dates */}
       {!isToday && (
-        <div className="flex justify-center pb-2">
+        <div className="flex justify-center pb-2 max-w-lg mx-auto px-4">
           <button
             onClick={goToToday}
             className="text-xs text-violet-400 hover:text-violet-300 font-medium px-3 py-1 rounded-lg hover:bg-violet-500/10 transition-colors"
@@ -384,27 +402,79 @@ export default function Today() {
         </div>
       )}
 
-      {/* Empty state */}
-      {groupedExercises.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-zinc-600 gap-3 px-8">
-          <Dumbbell className="w-10 h-10 opacity-30" />
-          <p className="text-sm text-center leading-relaxed">
-            {isToday
-              ? <>Nothing logged yet.<br />Tap <span className="text-zinc-400 font-medium">Add Exercise</span> below to start.</>
-              : 'No workout logged on this day.'}
-          </p>
-        </div>
-      )}
+      {/* Sidebar (Today list) + main column: on md+ they sit side by side; on phones the list is a horizontal strip above the cards */}
+      <div className="px-4 md:px-6">
+        <div
+          className={
+            groupedExercises.length > 0
+              ? 'md:flex md:flex-row md:gap-6 md:items-start'
+              : ''
+          }
+        >
+          {groupedExercises.length > 0 && (
+            <aside className="mb-4 md:mb-0 md:w-52 flex-shrink-0 md:sticky md:top-2 md:self-start">
+              <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide mb-2 px-0.5">Today</p>
+              <div className="flex md:flex-col gap-2 overflow-x-auto pb-1 md:overflow-y-auto md:max-h-[70vh] [-webkit-overflow-scrolling:touch]">
+                {groupedExercises.map(({ name }) => {
+                  const cat = (categoryMap[name.toLowerCase()] || '').toLowerCase();
+                  const color = CATEGORY_COLORS[cat] || null;
+                  const isActive = activeExercise === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => {
+                        setActiveExercise(name);
+                        setAddingTo(null);
+                        setEditingSetId(null);
+                      }}
+                      className={`flex-shrink-0 text-left md:w-full flex items-center gap-2 px-3.5 py-3 rounded-2xl text-sm font-medium min-h-[48px] transition-colors border ${
+                        isActive
+                          ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
+                          : 'bg-zinc-900/80 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
+                      <span className="truncate max-w-[10rem] md:max-w-none">{name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+          )}
 
-      {/* Exercise cards */}
-      <div className="px-4 space-y-3">
+          <div className="flex-1 min-w-0 max-w-lg mx-auto w-full">
+            {/* Empty state */}
+            {groupedExercises.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-zinc-600 gap-3 px-4">
+                <Dumbbell className="w-10 h-10 opacity-30" />
+                <p className="text-sm text-center leading-relaxed">
+                  {isToday
+                    ? <>Nothing logged yet.<br />Tap <span className="text-zinc-400 font-medium">Add Exercise</span> below to start.</>
+                    : 'No workout logged on this day.'}
+                </p>
+              </div>
+            )}
+
+            {/* Exercise cards */}
+            <div className="space-y-3">
         {groupedExercises.map(({ name, sets: exSets }) => {
           const cat = (categoryMap[name.toLowerCase()] || '').toLowerCase();
           const color = CATEGORY_COLORS[cat] || null;
           const isAdding = addingTo === name;
+          const isActive = activeExercise === name;
 
           return (
-            <div key={name} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div
+              key={name}
+              ref={(el) => {
+                if (el) cardRefs.current[name] = el;
+                else delete cardRefs.current[name];
+              }}
+              className={`bg-zinc-900 border rounded-2xl overflow-hidden transition-shadow ${
+                isActive ? 'border-violet-500 ring-2 ring-violet-500/35 shadow-lg shadow-violet-950/40' : 'border-zinc-800'
+              }`}
+            >
               {/* Card header */}
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-zinc-800/60">
                 {color
@@ -529,13 +599,20 @@ export default function Today() {
             </div>
           );
         })}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Sticky "Add Exercise" button */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 py-4 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pointer-events-none">
+      {/* Sticky "Add Exercise" — sits above the app bottom bar so Safari / PWA chrome stays predictable */}
+      <div
+        className="fixed left-0 right-0 px-4 py-3 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pointer-events-none z-[35]"
+        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <button
+          type="button"
           onClick={() => { setShowSheet(true); setAddingTo(null); }}
-          className="pointer-events-auto w-full max-w-lg mx-auto flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold py-4 rounded-2xl text-base transition-colors shadow-xl shadow-violet-900/30"
+          className="pointer-events-auto w-full max-w-lg mx-auto flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold py-4 min-h-[52px] rounded-2xl text-base transition-colors shadow-xl shadow-violet-900/30"
         >
           <Plus className="w-5 h-5" />
           Add Exercise
