@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
+import Today from './pages/Today';
 import Dashboard from './pages/Dashboard';
 import WorkoutLog from './pages/WorkoutLog';
 import Exercises from './pages/Exercises';
@@ -42,7 +43,7 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/today" replace />;
   }
 
   return children;
@@ -51,7 +52,7 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/today" replace />} />
 
       <Route
         path="/login"
@@ -69,6 +70,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
+        <Route path="/today" element={<Today />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/workouts" element={<WorkoutLog />} />
         <Route path="/exercises" element={<Exercises />} />
@@ -79,7 +81,7 @@ export default function App() {
         <Route path="/body-weight" element={<BodyWeightTracker />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/today" replace />} />
     </Routes>
   );
 }
