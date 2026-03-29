@@ -18,25 +18,39 @@ const CATEGORY_COLORS = {
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 const TODAY_DISPLAY = format(new Date(), 'EEEE, d MMMM');
 
+const FILTER_TABS = [
+  { label: 'All',       categories: null },
+  { label: 'Chest',     categories: ['chest'] },
+  { label: 'Back',      categories: ['back'] },
+  { label: 'Arms',      categories: ['biceps', 'triceps'] },
+  { label: 'Legs',      categories: ['legs'] },
+  { label: 'Shoulders', categories: ['shoulders'] },
+  { label: 'Abs',       categories: ['abs'] },
+  { label: 'Mobility',  categories: ['mobility'] },
+];
+
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
-// Shows a search field + scrollable exercise list.
-// If you type something that doesn't exist yet, a "Create" option appears.
+// Shows a search field, muscle-group filter tabs, and a scrollable list.
+// Typing something that doesn't exist shows a "Create" option.
 function AddExerciseSheet({ exercises, onSelect, onClose }) {
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('All');
   const inputRef = useRef(null);
 
   useEffect(() => {
-    // Auto-focus the search field when the sheet opens
     const t = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, []);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return exercises;
-    return exercises.filter((ex) =>
-      ex.name.toLowerCase().includes(search.trim().toLowerCase())
-    );
-  }, [exercises, search]);
+    const tab = FILTER_TABS.find((t) => t.label === activeTab);
+    return exercises.filter((ex) => {
+      const cat = (ex.category || '').toLowerCase();
+      const matchesSearch = !search.trim() || ex.name.toLowerCase().includes(search.trim().toLowerCase());
+      const matchesTab = !tab.categories || tab.categories.includes(cat);
+      return matchesSearch && matchesTab;
+    });
+  }, [exercises, search, activeTab]);
 
   const exactMatch = exercises.some(
     (ex) => ex.name.toLowerCase() === search.trim().toLowerCase()
@@ -44,18 +58,16 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
   const canCreate = search.trim().length > 0 && !exactMatch;
 
   return (
-    // Dark backdrop
     <div
       className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60"
       onClick={onClose}
     >
-      {/* Sheet panel — stops click propagation so tapping inside doesn't close */}
       <div
         className="bg-zinc-900 rounded-t-3xl border-t border-zinc-800 flex flex-col"
-        style={{ maxHeight: '80vh' }}
+        style={{ maxHeight: '82vh' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle + title */}
+        {/* Title + close */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <h2 className="text-zinc-100 font-semibold text-base">Add Exercise</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
@@ -64,7 +76,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
         </div>
 
         {/* Search input */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
@@ -78,9 +90,34 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
           </div>
         </div>
 
-        {/* List */}
+        {/* Muscle-group filter tabs — scrollable row */}
+        <div className="px-4 pb-2 overflow-x-auto">
+          <div className="flex gap-1.5 min-w-max">
+            {FILTER_TABS.map((tab) => {
+              const color = tab.categories ? CATEGORY_COLORS[tab.categories[0]] : null;
+              const isActive = activeTab === tab.label;
+              return (
+                <button
+                  key={tab.label}
+                  onClick={() => setActiveTab(tab.label)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-shrink-0 ${
+                    isActive
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                  }`}
+                >
+                  {color && !isActive && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+                  )}
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Exercise list */}
         <div className="overflow-y-auto flex-1 px-2 pb-6">
-          {/* "Create new" option when typed name doesn't exist */}
           {canCreate && (
             <button
               onClick={() => onSelect(search.trim())}
@@ -151,7 +188,9 @@ export default function Today() {
     [exercises]
   );
 
-  // Group today's sets by exercise name, preserving the order first seen
+  // Group today's sets by exercise name, preserving the order first seen.
+  // Also includes `addingTo` so a card appears immediately after picking an
+  // exercise, even before the first set has been saved.
   const groupedExercises = useMemo(() => {
     const order = [];
     const map = {};
@@ -162,8 +201,12 @@ export default function Today() {
       }
       map[s.exercise_name].push(s);
     });
+    if (addingTo && !map[addingTo]) {
+      order.push(addingTo);
+      map[addingTo] = [];
+    }
     return order.map((name) => ({ name, sets: map[name] }));
-  }, [sets]);
+  }, [sets, addingTo]);
 
   useEffect(() => {
     if (user) fetchAll();
