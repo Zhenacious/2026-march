@@ -31,7 +31,9 @@ const SET_TYPE_OPTIONS = [
   { value: 'superset', label: 'Super' },
 ];
 
-function SetRow({
+// React.memo means this component only re-renders when its own props change.
+// Without this, every keystroke in the exercise input would re-render every set row.
+const SetRow = React.memo(function SetRow({
   set, categoryMap, showExerciseName = true,
   canMoveUp, canMoveDown,
   onMoveUp, onMoveDown, onDelete, onEditStart, onGoToExercise,
@@ -111,7 +113,7 @@ function SetRow({
       </button>
     </div>
   );
-}
+});
 
 const MUSCLE_GROUPS = [
   { label: 'All',       categories: null },
@@ -170,10 +172,17 @@ export default function WorkoutLog() {
   });
   const [calDots, setCalDots] = useState({});
 
+  // Keep a ref to categoryMap so the calendar effect can read the latest value
+  // without needing categoryMap in its dependency array (which would cause an
+  // unnecessary re-fetch every time exercises are reloaded).
+  const categoryMapRef = React.useRef({});
+
   const categoryMap = useMemo(
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
     [exercises]
   );
+  // Keep ref in sync so the calendar effect always has the latest map
+  categoryMapRef.current = categoryMap;
 
   const { recentExerciseNames, exerciseLastSet } = useMemo(() => {
     const seenNames = new Set();
@@ -228,7 +237,7 @@ export default function WorkoutLog() {
       (sets || []).forEach((s) => {
         const date = idToDate[s.workout_id];
         if (!date) return;
-        const cat = (categoryMap[s.exercise_name.toLowerCase()] || '').toLowerCase();
+        const cat = (categoryMapRef.current[s.exercise_name.toLowerCase()] || '').toLowerCase();
         if (!cat || !CATEGORY_COLORS[cat]) return;
         if (!dots[date]) dots[date] = new Set();
         dots[date].add(cat);
@@ -238,7 +247,7 @@ export default function WorkoutLog() {
       setCalDots(result);
     }
     fetchCalDots();
-  }, [user, showDateCal, calMonth, categoryMap]);
+  }, [user, showDateCal, calMonth]); // categoryMap intentionally omitted — read via ref so exercise reloads don't re-trigger
 
   function fillFromRecent(exerciseName) {
     const last = exerciseLastSet[exerciseName];

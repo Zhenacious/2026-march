@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -196,34 +196,38 @@ export default function Exercises() {
     }
   }
 
-  // Filter by search + active muscle group tab
-  const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
+  // Filter by search + active muscle group tab — wrapped in useMemo so it only
+  // recalculates when exercises, search term, or selected tab actually change.
+  const { filtered, grouped, sortedCategories } = useMemo(() => {
+    const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
+    const filtered = exercises.filter((ex) => {
+      const cat = (ex.category || '').toLowerCase();
+      const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
+      const matchesGroup =
+        group.categories === null ||
+        (activeGroup === 'Uncategorized'
+          ? !Object.keys(CATEGORY_COLORS).includes(cat)
+          : group.categories.includes(cat));
+      return matchesSearch && matchesGroup;
+    });
+    const grouped = filtered.reduce((acc, ex) => {
+      const cat = ex.category || '';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(ex);
+      return acc;
+    }, {});
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      if (!a) return 1;
+      if (!b) return -1;
+      return a.localeCompare(b);
+    });
+    return { filtered, grouped, sortedCategories };
+  }, [exercises, search, activeGroup]);
 
-  const filtered = exercises.filter((ex) => {
-    const cat = (ex.category || '').toLowerCase();
-    const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
-    const matchesGroup =
-      group.categories === null ||
-      (activeGroup === 'Uncategorized'
-        ? !Object.keys(CATEGORY_COLORS).includes(cat)
-        : group.categories.includes(cat));
-    return matchesSearch && matchesGroup;
-  });
-
-  const grouped = filtered.reduce((acc, ex) => {
-    const cat = ex.category || '';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(ex);
-    return acc;
-  }, {});
-
-  const sortedCategories = Object.keys(grouped).sort((a, b) => {
-    if (!a) return 1;
-    if (!b) return -1;
-    return a.localeCompare(b);
-  });
-
-  const uncategorizedCount = exercises.filter((ex) => !ex.category || ex.category.trim() === '').length;
+  const uncategorizedCount = useMemo(
+    () => exercises.filter((ex) => !ex.category || ex.category.trim() === '').length,
+    [exercises]
+  );
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
