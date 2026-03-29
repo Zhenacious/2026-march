@@ -12,13 +12,11 @@ import {
   Menu,
   X,
   Scale,
-  ClipboardList,
   LayoutDashboard,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/today',       label: 'Today',        icon: Home },
-  { to: '/workouts',    label: 'Workouts',      icon: ClipboardList },
   { to: '/exercises',   label: 'Exercises',     icon: Library },
   { to: '/calendar',    label: 'Calendar',      icon: Calendar },
   { to: '/progress',    label: 'Progress',      icon: TrendingUp },

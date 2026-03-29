@@ -76,7 +76,7 @@ export default function Dashboard() {
       {/* Big action shortcuts */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <button
-          onClick={() => navigate(`/workouts?date=${today}`)}
+          onClick={() => navigate(`/today?date=${today}`)}
           className="group relative bg-violet-600 hover:bg-violet-500 rounded-2xl p-8 text-left transition-colors overflow-hidden"
         >
           <div className="absolute right-6 top-6 opacity-20 group-hover:opacity-30 transition-opacity">
@@ -132,7 +132,7 @@ export default function Dashboard() {
           <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Import</span>
         </button>
         <button
-          onClick={() => navigate('/workouts')}
+          onClick={() => navigate('/today')}
           className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
         >
           <Activity className="w-6 h-6 text-amber-400" />

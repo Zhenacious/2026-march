@@ -289,7 +289,7 @@ export default function CalendarView() {
             )}
 
             <button
-              onClick={() => navigate(`/workouts?date=${format(selectedDay, 'yyyy-MM-dd')}`)}
+              onClick={() => navigate(`/today?date=${format(selectedDay, 'yyyy-MM-dd')}`)}
               className="mt-4 flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               Go to Workout

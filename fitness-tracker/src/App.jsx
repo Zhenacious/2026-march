@@ -6,6 +6,7 @@ import Auth from './pages/Auth';
 import Today from './pages/Today';
 import Dashboard from './pages/Dashboard';
 import WorkoutLog from './pages/WorkoutLog';
+import { useSearchParams } from 'react-router-dom';
 import Exercises from './pages/Exercises';
 import CalendarView from './pages/CalendarView';
 import Progress from './pages/Progress';
@@ -49,10 +50,18 @@ function PublicRoute({ children }) {
   return children;
 }
 
+// Redirect /workouts?date=X → /today?date=X so old links still work
+function WorkoutsRedirect() {
+  const [searchParams] = useSearchParams();
+  const date = searchParams.get('date');
+  return <Navigate to={date ? `/today?date=${date}` : '/today'} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/today" replace />} />
+      <Route path="/workouts" element={<WorkoutsRedirect />} />
 
       <Route
         path="/login"
@@ -72,7 +81,6 @@ export default function App() {
       >
         <Route path="/today" element={<Today />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/workouts" element={<WorkoutLog />} />
         <Route path="/exercises" element={<Exercises />} />
         <Route path="/exercises/:name" element={<ExerciseHistory />} />
         <Route path="/calendar" element={<CalendarView />} />

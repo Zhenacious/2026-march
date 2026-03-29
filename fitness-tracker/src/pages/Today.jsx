@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { format } from 'date-fns';
-import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search } from 'lucide-react';
+import { format, addDays, subDays, parseISO } from 'date-fns';
+import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',   label: 'Chest' },
@@ -15,8 +16,10 @@ const CATEGORY_COLORS = {
   mobility:  { dot: 'bg-teal-500',   badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40',   label: 'Mobility' },
 };
 
-const TODAY = format(new Date(), 'yyyy-MM-dd');
-const TODAY_DISPLAY = format(new Date(), 'EEEE, d MMMM');
+// Returns today's date as a yyyy-MM-dd string, evaluated fresh each call
+function getTodayStr() {
+  return format(new Date(), 'yyyy-MM-dd');
+}
 
 const FILTER_TABS = [
   { label: 'All',       categories: null },
@@ -165,32 +168,32 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
 // ─── Main page ───────────────────────────────────────────────────────────────
 export default function Today() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // The date being viewed — defaults to today, can be changed via arrows
+  const selectedDate = searchParams.get('date') || getTodayStr();
+  const isToday = selectedDate === getTodayStr();
+  const dateObj = parseISO(selectedDate + 'T00:00:00');
+  const heading = isToday ? 'Today' : format(dateObj, 'EEEE');
+  const subheading = format(dateObj, 'd MMMM yyyy');
+
   const [sets, setSets] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSheet, setShowSheet] = useState(false);
 
-  // Which exercise currently has its "add set" form open
   const [addingTo, setAddingTo] = useState(null);
   const [addForm, setAddForm] = useState({ weightKg: '', reps: '', setType: 'normal' });
-
-  // Which set is tapped (shows edit/delete buttons)
   const [tappedSetId, setTappedSetId] = useState(null);
-
-  // Which set is being edited inline
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({ weightKg: '', reps: '', setType: 'normal' });
   const [saving, setSaving] = useState(false);
 
-  // Map exercise name → category for colour coding
   const categoryMap = useMemo(
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
     [exercises]
   );
 
-  // Group today's sets by exercise name, preserving the order first seen.
-  // Also includes `addingTo` so a card appears immediately after picking an
-  // exercise, even before the first set has been saved.
   const groupedExercises = useMemo(() => {
     const order = [];
     const map = {};
@@ -201,6 +204,7 @@ export default function Today() {
       }
       map[s.exercise_name].push(s);
     });
+    // Show a card for the exercise being added even if it has no sets yet
     if (addingTo && !map[addingTo]) {
       order.push(addingTo);
       map[addingTo] = [];
@@ -208,61 +212,63 @@ export default function Today() {
     return order.map((name) => ({ name, sets: map[name] }));
   }, [sets, addingTo]);
 
+  // Fetch exercise library once on login
   useEffect(() => {
-    if (user) fetchAll();
+    if (!user) return;
+    supabase.from('exercises').select('id, name, category').eq('user_id', user.id).order('name')
+      .then(({ data }) => setExercises(data || []));
   }, [user]);
 
-  async function fetchAll() {
+  // Fetch sets whenever the viewed date changes
+  useEffect(() => {
+    if (!user) return;
     setLoading(true);
-    try {
-      const [exResult, workoutResult] = await Promise.all([
-        supabase.from('exercises').select('id, name, category').eq('user_id', user.id).order('name'),
-        supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', TODAY).maybeSingle(),
-      ]);
-      setExercises(exResult.data || []);
-      if (workoutResult.data) {
+    setAddingTo(null);
+    setEditingSetId(null);
+    setTappedSetId(null);
+    supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle()
+      .then(async ({ data: workout }) => {
+        if (!workout) { setSets([]); setLoading(false); return; }
         const { data: setsData } = await supabase
-          .from('workout_sets').select('*').eq('workout_id', workoutResult.data.id).order('set_order');
+          .from('workout_sets').select('*').eq('workout_id', workout.id).order('set_order');
         setSets(setsData || []);
-      } else {
-        setSets([]);
-      }
-    } finally {
-      setLoading(false);
+        setLoading(false);
+      });
+  }, [user, selectedDate]);
+
+  function goToPrevDay() {
+    setSearchParams({ date: format(subDays(dateObj, 1), 'yyyy-MM-dd') });
+  }
+  function goToNextDay() {
+    const next = addDays(dateObj, 1);
+    if (format(next, 'yyyy-MM-dd') <= getTodayStr()) {
+      setSearchParams({ date: format(next, 'yyyy-MM-dd') });
     }
   }
+  function goToToday() {
+    setSearchParams({});
+  }
 
-  // Get today's workout id, creating the row if it doesn't exist yet
   async function ensureWorkout() {
     const { data: existing } = await supabase
-      .from('workouts').select('id').eq('user_id', user.id).eq('date', TODAY).maybeSingle();
+      .from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle();
     if (existing) return existing.id;
     const { data: created } = await supabase
-      .from('workouts').insert({ user_id: user.id, date: TODAY }).select().single();
+      .from('workouts').insert({ user_id: user.id, date: selectedDate }).select().single();
     return created.id;
   }
 
-  // Called when user picks or creates an exercise from the sheet
   async function handlePickExercise(name) {
     setShowSheet(false);
-
-    // If it's a brand-new exercise, add it to the library
-    const alreadyExists = exercises.some(
-      (ex) => ex.name.toLowerCase() === name.toLowerCase()
-    );
+    const alreadyExists = exercises.some((ex) => ex.name.toLowerCase() === name.toLowerCase());
     if (!alreadyExists) {
       const { data: newEx } = await supabase
         .from('exercises')
         .upsert({ user_id: user.id, name, category: '' }, { onConflict: 'user_id,name' })
-        .select('id, name, category')
-        .single();
+        .select('id, name, category').single();
       if (newEx) setExercises((prev) => [...prev, newEx].sort((a, b) => a.name.localeCompare(b.name)));
     }
-
-    // Pre-fill from the last set of this exercise logged today (if any)
-    const lastSet = [...sets].reverse().find(
-      (s) => s.exercise_name.toLowerCase() === name.toLowerCase()
-    );
+    const lastSet = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
     setAddForm({
       weightKg: lastSet?.weight_kg > 0 ? String(lastSet.weight_kg) : '',
       reps: lastSet?.reps > 0 ? String(lastSet.reps) : '',
@@ -273,12 +279,8 @@ export default function Today() {
     setTappedSetId(null);
   }
 
-  // Called when user taps "+ set" on an existing exercise card
   function handleStartAdd(exerciseName) {
-    if (addingTo === exerciseName) {
-      setAddingTo(null);
-      return;
-    }
+    if (addingTo === exerciseName) { setAddingTo(null); return; }
     const lastSet = [...sets].reverse().find((s) => s.exercise_name === exerciseName);
     setAddForm({
       weightKg: lastSet?.weight_kg > 0 ? String(lastSet.weight_kg) : '',
@@ -296,24 +298,16 @@ export default function Today() {
       const workoutId = await ensureWorkout();
       const maxOrder = sets.length > 0 ? Math.max(...sets.map((s) => s.set_order)) : 0;
       const { data: newSet, error } = await supabase.from('workout_sets').insert({
-        workout_id: workoutId,
-        exercise_name: addingTo,
-        weight_kg: parseFloat(addForm.weightKg) || 0,
-        reps: parseInt(addForm.reps, 10) || 0,
-        set_order: maxOrder + 1,
-        set_type: addForm.setType,
-        distance: 0,
-        distance_unit: 'km',
-        duration_seconds: 0,
+        workout_id: workoutId, exercise_name: addingTo,
+        weight_kg: parseFloat(addForm.weightKg) || 0, reps: parseInt(addForm.reps, 10) || 0,
+        set_order: maxOrder + 1, set_type: addForm.setType,
+        distance: 0, distance_unit: 'km', duration_seconds: 0,
       }).select().single();
       if (error) throw error;
       setSets((prev) => [...prev, newSet]);
       setAddingTo(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setSaving(false); }
   }
 
   async function handleDeleteSet(setId) {
@@ -321,9 +315,7 @@ export default function Today() {
       await supabase.from('workout_sets').delete().eq('id', setId);
       setSets((prev) => prev.filter((s) => s.id !== setId));
       if (tappedSetId === setId) setTappedSetId(null);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   }
 
   function handleStartEdit(set) {
@@ -348,36 +340,58 @@ export default function Today() {
       if (error) throw error;
       setSets((prev) => prev.map((s) => s.id === editingSetId ? updated : s));
       setEditingSetId(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setSaving(false); }
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-zinc-400 text-sm">
-        Loading…
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64 text-zinc-400 text-sm">Loading…</div>;
   }
 
   return (
     <div className="max-w-lg mx-auto pb-28">
-      {/* Page header */}
-      <div className="px-4 pt-5 pb-4">
-        <h1 className="text-2xl font-bold text-zinc-100">Today</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">{TODAY_DISPLAY}</p>
+
+      {/* ── Date navigation header ── */}
+      <div className="px-4 pt-5 pb-4 flex items-center gap-2">
+        <button
+          onClick={goToPrevDay}
+          className="text-zinc-500 hover:text-zinc-200 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <div className="flex-1 text-center">
+          <h1 className="text-2xl font-bold text-zinc-100 leading-tight">{heading}</h1>
+          <p className="text-zinc-500 text-sm">{subheading}</p>
+        </div>
+        <button
+          onClick={goToNextDay}
+          disabled={isToday}
+          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 p-2 rounded-xl hover:bg-zinc-800 disabled:hover:bg-transparent transition-colors flex-shrink-0"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
       </div>
+
+      {/* "Back to today" link when browsing past dates */}
+      {!isToday && (
+        <div className="flex justify-center pb-2">
+          <button
+            onClick={goToToday}
+            className="text-xs text-violet-400 hover:text-violet-300 font-medium px-3 py-1 rounded-lg hover:bg-violet-500/10 transition-colors"
+          >
+            ↩ Back to today
+          </button>
+        </div>
+      )}
 
       {/* Empty state */}
       {groupedExercises.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3 px-8">
+        <div className="flex flex-col items-center justify-center py-16 text-zinc-600 gap-3 px-8">
           <Dumbbell className="w-10 h-10 opacity-30" />
           <p className="text-sm text-center leading-relaxed">
-            Nothing logged yet.<br />
-            Tap <span className="text-zinc-400 font-medium">Add Exercise</span> below to start.
+            {isToday
+              ? <>Nothing logged yet.<br />Tap <span className="text-zinc-400 font-medium">Add Exercise</span> below to start.</>
+              : 'No workout logged on this day.'}
           </p>
         </div>
       )}
@@ -391,13 +405,11 @@ export default function Today() {
 
           return (
             <div key={name} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-
-              {/* Card header: exercise name + category badge + add-set button */}
+              {/* Card header */}
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-zinc-800/60">
                 {color
                   ? <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />
-                  : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-zinc-700" />
-                }
+                  : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-zinc-700" />}
                 <span className="text-zinc-100 font-semibold text-sm flex-1 truncate">{name}</span>
                 {color && (
                   <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium flex-shrink-0`}>
@@ -420,86 +432,52 @@ export default function Today() {
                 {exSets.map((set, i) => (
                   <div key={set.id}>
                     {editingSetId === set.id ? (
-                      // ── Inline edit form ──
                       <div className="px-4 py-3 flex items-center gap-2 bg-zinc-800/30">
                         <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
-                        <input
-                          autoFocus
-                          type="number"
-                          inputMode="decimal"
-                          value={editValues.weightKg}
+                        <input autoFocus type="number" inputMode="decimal" value={editValues.weightKg}
                           onChange={(e) => setEditValues((v) => ({ ...v, weightKg: e.target.value }))}
                           placeholder="kg"
                           className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                         <span className="text-zinc-600 text-xs">×</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          value={editValues.reps}
+                        <input type="number" inputMode="numeric" value={editValues.reps}
                           onChange={(e) => setEditValues((v) => ({ ...v, reps: e.target.value }))}
                           placeholder="reps"
                           className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                         <div className="flex-1" />
-                        <button
-                          onClick={handleSaveEdit}
-                          disabled={saving}
-                          className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors"
-                        >
+                        <button onClick={handleSaveEdit} disabled={saving}
+                          className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors">
                           <Check className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setEditingSetId(null)}
-                          className="text-zinc-600 hover:text-zinc-300 p-1.5 rounded transition-colors"
-                        >
+                        <button onClick={() => setEditingSetId(null)}
+                          className="text-zinc-600 hover:text-zinc-300 p-1.5 rounded transition-colors">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ) : (
-                      // ── Set row (tap to reveal edit/delete) ──
                       <div
                         onClick={() => setTappedSetId(tappedSetId === set.id ? null : set.id)}
                         className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none active:bg-zinc-800/40 transition-colors"
                       >
                         <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
                         <span className="text-zinc-300 text-sm flex-1">
-                          {set.weight_kg > 0
-                            ? `${set.weight_kg} kg`
-                            : set.reps > 0
-                            ? <span className="text-teal-400 font-medium">BW</span>
-                            : null}
+                          {set.weight_kg > 0 ? `${set.weight_kg} kg` : set.reps > 0 ? <span className="text-teal-400 font-medium">BW</span> : null}
                           {set.weight_kg > 0 && set.reps > 0 ? ' × ' : ''}
                           {set.reps > 0 ? `${set.reps} reps` : ''}
-                          {!set.weight_kg && !set.reps && set.distance > 0
-                            ? `${set.distance} ${set.distance_unit || 'km'}`
-                            : ''}
-                          {set.duration_seconds > 0
-                            ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}`
-                            : ''}
+                          {!set.weight_kg && !set.reps && set.distance > 0 ? `${set.distance} ${set.distance_unit || 'km'}` : ''}
+                          {set.duration_seconds > 0 ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}` : ''}
                         </span>
-                        {set.set_type === 'dropset' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">
-                            Drop
-                          </span>
-                        )}
-                        {set.set_type === 'superset' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">
-                            Super
-                          </span>
-                        )}
+                        {set.set_type === 'dropset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">Drop</span>}
+                        {set.set_type === 'superset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">Super</span>}
                         {tappedSetId === set.id && (
                           <>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
-                              className="text-zinc-500 hover:text-violet-400 p-1.5 rounded transition-colors flex-shrink-0"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
+                              className="text-zinc-500 hover:text-violet-400 p-1.5 rounded transition-colors flex-shrink-0">
                               <Pencil className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
-                              className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
+                              className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </>
@@ -510,54 +488,38 @@ export default function Today() {
                 ))}
               </div>
 
-              {/* Add set form (shown when this exercise's "+ set" was tapped) */}
+              {/* Add set form */}
               {isAdding && (
                 <div className="px-4 py-3 border-t border-zinc-800/60 bg-zinc-800/20">
                   <div className="flex items-center gap-2">
-                    <input
-                      autoFocus
-                      type="number"
-                      inputMode="decimal"
-                      value={addForm.weightKg}
+                    <input autoFocus type="number" inputMode="decimal" value={addForm.weightKg}
                       onChange={(e) => setAddForm((f) => ({ ...f, weightKg: e.target.value }))}
                       placeholder="Weight (kg)"
                       className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
                     <span className="text-zinc-600 text-xs flex-shrink-0">×</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={addForm.reps}
+                    <input type="number" inputMode="numeric" value={addForm.reps}
                       onChange={(e) => setAddForm((f) => ({ ...f, reps: e.target.value }))}
                       placeholder="Reps"
                       className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
-                    <button
-                      onClick={handleSaveSet}
-                      disabled={saving}
-                      className="bg-violet-600 hover:bg-violet-500 active:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex-shrink-0"
-                    >
+                    <button onClick={handleSaveSet} disabled={saving}
+                      className="bg-violet-600 hover:bg-violet-500 active:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex-shrink-0">
                       {saving ? '…' : 'Add'}
                     </button>
-                    <button
-                      onClick={() => setAddingTo(null)}
-                      className="text-zinc-600 hover:text-zinc-300 p-2 rounded flex-shrink-0"
-                    >
+                    <button onClick={() => setAddingTo(null)}
+                      className="text-zinc-600 hover:text-zinc-300 p-2 rounded flex-shrink-0">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* Set type selector */}
                   <div className="flex gap-1.5 mt-2.5">
                     {[['normal', 'Normal'], ['dropset', 'Drop set'], ['superset', 'Super set']].map(([val, label]) => (
-                      <button
-                        key={val}
-                        onClick={() => setAddForm((f) => ({ ...f, setType: val }))}
+                      <button key={val} onClick={() => setAddForm((f) => ({ ...f, setType: val }))}
                         className={`text-xs px-3 py-1 rounded-lg border font-medium transition-colors ${
                           addForm.setType === val
                             ? 'bg-violet-600 text-white border-violet-600'
                             : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:text-zinc-300'
-                        }`}
-                      >
+                        }`}>
                         {label}
                       </button>
                     ))}
@@ -580,7 +542,6 @@ export default function Today() {
         </button>
       </div>
 
-      {/* Add exercise bottom sheet */}
       {showSheet && (
         <AddExerciseSheet
           exercises={exercises}

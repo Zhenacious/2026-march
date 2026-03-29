@@ -421,7 +421,7 @@ export default function ExerciseHistory() {
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <div>
                       <button
-                        onClick={() => navigate(`/workouts?date=${date}`)}
+                        onClick={() => navigate(`/today?date=${date}`)}
                         className="text-zinc-100 font-semibold text-sm hover:text-violet-400 transition-colors text-left"
                       >
                         {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
