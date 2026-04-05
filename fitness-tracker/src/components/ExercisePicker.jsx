@@ -64,7 +64,7 @@ export default function ExercisePicker({ exercises, onSelect, onClose }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search exercises…"
-              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -77,7 +77,7 @@ export default function ExercisePicker({ exercises, onSelect, onClose }) {
               onClick={() => setActiveGroup(g.label)}
               className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                 activeGroup === g.label
-                  ? 'bg-violet-600 text-white border-violet-600'
+                  ? 'bg-teal-600 text-white border-teal-600'
                   : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
               }`}
             >

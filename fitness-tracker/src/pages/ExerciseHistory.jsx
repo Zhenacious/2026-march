@@ -269,12 +269,12 @@ export default function ExerciseHistory() {
             value={editExName}
             onChange={(e) => setEditExName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') saveExerciseEdit(); if (e.key === 'Escape') setEditingExercise(false); }}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 flex-1 min-w-0"
+            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 flex-1 min-w-0"
           />
           <select
             value={editExCategory}
             onChange={(e) => setEditExCategory(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           >
             <option value="">Uncategorized</option>
             {CATEGORY_OPTIONS.map((c) => (
@@ -303,7 +303,7 @@ export default function ExerciseHistory() {
           )}
           <button
             onClick={() => { setEditExName(exercise?.name || exerciseName); setEditExCategory(exercise?.category || ''); setEditingExercise(true); }}
-            className="text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
+            className="text-zinc-700 hover:text-teal-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -354,12 +354,12 @@ export default function ExerciseHistory() {
               {/* Best actual 1RM */}
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
                 <div className="flex items-center gap-1.5 mb-3">
-                  <Trophy className="w-3.5 h-3.5 text-violet-400" />
+                  <Trophy className="w-3.5 h-3.5 text-teal-400" />
                   <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Best 1RM</span>
                 </div>
                 {prs.actual1rm.value > 0 ? (
                   <>
-                    <p className="text-violet-400 text-2xl font-bold leading-none mb-1">
+                    <p className="text-teal-400 text-2xl font-bold leading-none mb-1">
                       {prs.actual1rm.value}<span className="text-sm font-normal text-zinc-500 ml-1">kg</span>
                     </p>
                     <p className="text-zinc-400 text-xs mb-1">1 rep</p>
@@ -388,9 +388,9 @@ export default function ExerciseHistory() {
                   <Line
                     type="monotone"
                     dataKey="Est. 1RM"
-                    stroke="#8b5cf6"
+                    stroke="#14b8a6"
                     strokeWidth={2}
-                    dot={{ fill: '#8b5cf6', r: 3 }}
+                    dot={{ fill: '#14b8a6', r: 3 }}
                     activeDot={{ r: 5 }}
                   />
                 </LineChart>
@@ -412,7 +412,7 @@ export default function ExerciseHistory() {
                     <div>
                       <button
                         onClick={() => navigate(`/today?date=${date}`)}
-                        className="text-zinc-100 font-semibold text-sm hover:text-violet-400 transition-colors text-left"
+                        className="text-zinc-100 font-semibold text-sm hover:text-teal-400 transition-colors text-left"
                       >
                         {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
                       </button>
@@ -420,28 +420,28 @@ export default function ExerciseHistory() {
                     </div>
                     <div className="text-right">
                       <p className="text-zinc-500 text-xs">Est. 1RM</p>
-                      <p className="text-violet-400 font-semibold text-sm">{bestE1RM} kg</p>
+                      <p className="text-teal-400 font-semibold text-sm">{bestE1RM} kg</p>
                     </div>
                   </div>
                   <div className="divide-y divide-zinc-800">
                     {sets.map((s, i) => {
                       if (editingSetId === s.id) {
                         return (
-                          <div key={s.id} className="px-5 py-3 bg-zinc-800/80 border-l-2 border-violet-500">
+                          <div key={s.id} className="px-5 py-3 bg-zinc-800/80 border-l-2 border-teal-500">
                             <p className="text-zinc-500 text-xs mb-2">Set {i + 1}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
                               <div>
                                 <label className="text-zinc-500 text-xs block mb-0.5">Weight (kg)</label>
                                 <input type="number" value={editValues.weight_kg} min="0" step="0.5"
                                   onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
-                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 />
                               </div>
                               <div>
                                 <label className="text-zinc-500 text-xs block mb-0.5">Reps</label>
                                 <input type="number" value={editValues.reps} min="0"
                                   onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
-                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 />
                               </div>
                               <div>
@@ -449,11 +449,11 @@ export default function ExerciseHistory() {
                                 <div className="flex gap-1">
                                   <input type="number" value={editValues.distance} min="0" step="0.1"
                                     onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   />
                                   <select value={editValues.distance_unit}
                                     onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
-                                    className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                    className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   >
                                     <option value="km">km</option>
                                     <option value="mi">mi</option>
@@ -466,12 +466,12 @@ export default function ExerciseHistory() {
                                 <div className="flex gap-1 items-center">
                                   <input type="number" value={editValues.duration_min} min="0" placeholder="min"
                                     onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   />
                                   <span className="text-zinc-500 text-xs">:</span>
                                   <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
                                     onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   />
                                 </div>
                               </div>
@@ -484,7 +484,7 @@ export default function ExerciseHistory() {
                                     editValues.set_type === opt.value
                                       ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
                                       : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
-                                      : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
+                                      : 'bg-teal-500/20 text-teal-300 border-teal-500/60'
                                       : 'bg-zinc-700 text-zinc-400 border-zinc-600'
                                   }`}
                                 >{opt.label}</button>
@@ -533,7 +533,7 @@ export default function ExerciseHistory() {
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => startEdit(s)}
-                              className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
+                              className="text-zinc-600 hover:text-teal-400 transition-colors p-1 rounded"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>

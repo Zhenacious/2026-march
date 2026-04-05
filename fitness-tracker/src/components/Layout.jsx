@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Home,
-  Dumbbell,
+  Waves,
   Library,
   Calendar,
   TrendingUp,
@@ -51,10 +51,10 @@ export default function Layout() {
       {/* ── Simple top bar (no slide-out drawer — avoids odd Safari window / chrome shifts) ── */}
       <header className="flex items-center justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3.5 bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-30">
         <NavLink to="/today" className="flex items-center gap-2.5" onClick={() => setMoreOpen(false)}>
-          <div className="bg-violet-600 p-1.5 rounded-lg">
-            <Dumbbell className="w-4 h-4 text-white" />
+          <div className="bg-teal-600 p-1.5 rounded-lg">
+            <Waves className="w-4 h-4 text-white" />
           </div>
-          <span className="text-zinc-100 font-semibold text-base">FitTrack</span>
+          <span className="font-semibold text-base"><span className="bg-gradient-to-r from-teal-400 to-cyan-300 bg-clip-text text-transparent">Dolphin</span><span className="text-zinc-100">FitTrack</span></span>
         </NavLink>
       </header>
 
@@ -75,7 +75,7 @@ export default function Layout() {
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-0.5 rounded-2xl py-3.5 min-h-[3.25rem] text-sm font-semibold transition-colors ${
                 isActive
-                  ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40'
+                  ? 'bg-gradient-to-r from-teal-600 to-cyan-500 text-white shadow-lg shadow-teal-900/40'
                   : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 active:bg-zinc-800'
               }`
             }
@@ -88,7 +88,7 @@ export default function Layout() {
             onClick={() => setMoreOpen(true)}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-2xl py-3.5 min-h-[3.25rem] text-sm font-semibold transition-colors ${
               !isTodayRoute
-                ? 'bg-zinc-800 text-violet-300 ring-1 ring-violet-500/40'
+                ? 'bg-zinc-800 text-teal-300 ring-1 ring-teal-500/40'
                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 active:bg-zinc-800'
             }`}
             aria-expanded={moreOpen}
@@ -134,7 +134,7 @@ export default function Layout() {
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-3.5 rounded-2xl text-base font-medium min-h-[52px] transition-colors ${
                       isActive
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'text-zinc-200 hover:bg-zinc-800 active:bg-zinc-800/90'
                     }`
                   }
@@ -146,7 +146,7 @@ export default function Layout() {
             </nav>
             <div className="border-t border-zinc-800 px-3 pt-2 pb-4 space-y-2">
               <div className="flex items-center gap-2 px-4 py-2">
-                <div className="w-9 h-9 rounded-full bg-violet-700 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-teal-700 flex items-center justify-center flex-shrink-0">
                   <span className="text-white text-sm font-medium">
                     {user?.email?.[0]?.toUpperCase() || 'U'}
                   </span>

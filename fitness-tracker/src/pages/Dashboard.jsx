@@ -97,7 +97,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <button
           onClick={() => navigate(`/today?date=${today}`)}
-          className="group relative bg-violet-600 hover:bg-violet-500 rounded-2xl p-8 text-left transition-colors overflow-hidden"
+          className="group relative bg-gradient-to-br from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 rounded-2xl p-8 text-left transition-colors overflow-hidden"
         >
           <div className="absolute right-6 top-6 opacity-20 group-hover:opacity-30 transition-opacity">
             <Plus className="w-24 h-24" />
@@ -150,7 +150,7 @@ export default function Dashboard() {
             <div className="flex items-end justify-between gap-1">
               {stats.sevenDays.map(({ date, active, label }) => (
                 <div key={date} className="flex flex-col items-center gap-1.5 flex-1">
-                  <div className={`w-full rounded-md ${active ? 'bg-violet-500 h-5' : 'bg-zinc-800 h-3'} transition-all`} />
+                  <div className={`w-full rounded-md ${active ? 'bg-teal-500 h-5' : 'bg-zinc-800 h-3'} transition-all`} />
                   <span className="text-zinc-600 text-[10px]">{label}</span>
                 </div>
               ))}
@@ -165,7 +165,7 @@ export default function Dashboard() {
           onClick={() => navigate('/progress')}
           className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
         >
-          <TrendingUp className="w-6 h-6 text-violet-400" />
+          <TrendingUp className="w-6 h-6 text-teal-400" />
           <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Progress</span>
         </button>
         <button
@@ -197,7 +197,7 @@ export default function Dashboard() {
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Your Stats</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Total Workouts', value: stats.totalWorkouts, color: 'text-violet-400' },
+              { label: 'Total Workouts', value: stats.totalWorkouts, color: 'text-teal-400' },
               { label: 'Total Sets', value: stats.totalSets, color: 'text-blue-400' },
               { label: 'Most Frequent', value: stats.mostFrequent, color: 'text-emerald-400' },
               { label: 'Last Workout', value: stats.lastWorkout, color: 'text-amber-400' },

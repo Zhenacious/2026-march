@@ -105,7 +105,7 @@ export default function PersonalRecords() {
             onClick={() => setActiveGroup(g.label)}
             className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-shrink-0 ${
               activeGroup === g.label
-                ? 'bg-violet-600 text-white border-violet-600'
+                ? 'bg-teal-600 text-white border-teal-600'
                 : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >

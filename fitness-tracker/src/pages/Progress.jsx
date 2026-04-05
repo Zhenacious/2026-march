@@ -183,7 +183,7 @@ export default function Progress() {
             onClick={() => setTimeScale(t.value)}
             className={`text-xs px-4 py-2 rounded-lg border font-medium transition-colors ${
               timeScale === t.value
-                ? 'bg-violet-600 text-white border-violet-600'
+                ? 'bg-teal-600 text-white border-teal-600'
                 : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >
@@ -201,7 +201,7 @@ export default function Progress() {
               onClick={() => setActiveGroup(g.label)}
               className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                 activeGroup === g.label
-                  ? 'bg-violet-600 text-white border-violet-600'
+                  ? 'bg-teal-600 text-white border-teal-600'
                   : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
               }`}
             >
@@ -245,7 +245,7 @@ export default function Progress() {
             <select
               value={selectedExercise}
               onChange={(e) => setSelectedExercise(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-48"
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-48"
             >
               {filtered.map((ex) => (
                 <option key={ex.name} value={ex.name}>
@@ -291,9 +291,9 @@ export default function Progress() {
                 <Line
                   type="monotone"
                   dataKey="Est. 1RM (kg)"
-                  stroke="#8b5cf6"
+                  stroke="#14b8a6"
                   strokeWidth={2}
-                  dot={{ fill: '#8b5cf6', r: 3 }}
+                  dot={{ fill: '#14b8a6', r: 3 }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>
@@ -320,7 +320,7 @@ export default function Progress() {
                 <Tooltip content={<CustomTooltip />} />
                 <Bar
                   dataKey="Total Volume (kg)"
-                  fill="#6d28d9"
+                  fill="#0d9488"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

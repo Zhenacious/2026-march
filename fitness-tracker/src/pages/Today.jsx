@@ -23,7 +23,7 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
       <div className="flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-12 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-violet-400" />
+            <BookOpen className="w-4 h-4 text-teal-400" />
             <h2 className="text-zinc-100 font-semibold text-base">Templates</h2>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
@@ -42,12 +42,12 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
                   value={saveName}
                   onChange={(e) => setSaveName(e.target.value)}
                   placeholder="e.g. Push Day"
-                  className="flex-1 bg-zinc-700 border border-zinc-600 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="flex-1 bg-zinc-700 border border-zinc-600 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 <button
                   onClick={() => { if (saveName.trim()) { onSave(saveName); setSaveName(''); } }}
                   disabled={!saveName.trim()}
-                  className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                  className="bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
                 >
                   Save
                 </button>
@@ -74,7 +74,7 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
                 <p className="text-zinc-500 text-xs mb-3">{t.exercises.join(' · ')}</p>
                 <button
                   onClick={() => onLoad(t)}
-                  className="w-full bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-violet-300 text-sm font-semibold py-2 rounded-xl transition-colors"
+                  className="w-full bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/40 text-teal-300 text-sm font-semibold py-2 rounded-xl transition-colors"
                 >
                   Load template
                 </button>
@@ -144,7 +144,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search or type new exercise…"
-              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
         </div>
@@ -161,7 +161,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
                   onClick={() => setActiveTab(tab.label)}
                   className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-shrink-0 ${
                     isActive
-                      ? 'bg-violet-600 text-white border-violet-600'
+                      ? 'bg-teal-600 text-white border-teal-600'
                       : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
                   }`}
                 >
@@ -180,10 +180,10 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
           {canCreate && (
             <button
               onClick={() => onSelect(search.trim())}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-800 transition-colors text-left"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-800 transition-colors text-left ring-1 ring-teal-500/40"
             >
-              <div className="w-7 h-7 rounded-full bg-violet-600/20 border border-violet-500/40 flex items-center justify-center flex-shrink-0">
-                <Plus className="w-3.5 h-3.5 text-violet-400" />
+              <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
+                <Plus className="w-3.5 h-3.5 text-teal-400" />
               </div>
               <div>
                 <p className="text-zinc-100 text-sm font-medium">Create &ldquo;{search.trim()}&rdquo;</p>
@@ -247,6 +247,22 @@ export default function Today() {
   const [saving, setSaving] = useState(false);
   /** Which exercise row is “focused” — drives sidebar highlight and scroll-into-view after add. */
   const [activeExercise, setActiveExercise] = useState(null);
+
+  // Per-set notes — stored in localStorage under fittrack_set_notes as { [setId]: string }
+  const [setNotes, setSetNotes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('fittrack_set_notes') || '{}'); }
+    catch { return {}; }
+  });
+
+  function saveSetNote(setId, value) {
+    setSetNotes((prev) => {
+      const next = { ...prev };
+      if (value.trim()) next[setId] = value.trim();
+      else delete next[setId];
+      localStorage.setItem('fittrack_set_notes', JSON.stringify(next));
+      return next;
+    });
+  }
 
   // Session note — one text note per workout date, saved to localStorage
   const [note, setNote] = useState('');
@@ -498,7 +514,7 @@ export default function Today() {
         <button
           onClick={() => setShowTemplates(true)}
           title="Workout templates"
-          className="text-zinc-500 hover:text-violet-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0"
+          className="text-zinc-500 hover:text-teal-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0"
         >
           <BookOpen className="w-5 h-5" />
         </button>
@@ -516,7 +532,7 @@ export default function Today() {
         <div className="flex justify-center pb-2 max-w-lg mx-auto px-4">
           <button
             onClick={goToToday}
-            className="text-xs text-violet-400 hover:text-violet-300 font-medium px-3 py-1 rounded-lg hover:bg-violet-500/10 transition-colors"
+            className="text-xs text-teal-400 hover:text-teal-300 font-medium px-3 py-1 rounded-lg hover:bg-teal-500/10 transition-colors"
           >
             ↩ Back to today
           </button>
@@ -532,7 +548,7 @@ export default function Today() {
             onBlur={(e) => handleSaveNote(e.target.value)}
             placeholder="Session note…"
             rows={2}
-            className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 resize-none"
+            className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none"
           />
         ) : (
           <button
@@ -562,7 +578,7 @@ export default function Today() {
                 <button
                   type="button"
                   onClick={() => { setShowSheet(true); setAddingTo(null); }}
-                  className="flex-shrink-0 md:w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold min-h-[48px] transition-colors bg-violet-600/20 border border-violet-500/40 text-violet-400 hover:bg-violet-600/30 hover:border-violet-500/70"
+                  className="flex-shrink-0 md:w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold min-h-[48px] transition-colors bg-teal-600/20 border border-teal-500/40 text-teal-400 hover:bg-teal-600/30 hover:border-teal-500/70"
                 >
                   <Plus className="w-4 h-4" />
                   <span className="md:inline">Add</span>
@@ -582,7 +598,7 @@ export default function Today() {
                       }}
                       className={`flex-shrink-0 text-left md:w-full flex items-center gap-2 px-3.5 py-3 rounded-2xl text-sm font-medium min-h-[48px] transition-colors border ${
                         isActive
-                          ? 'bg-violet-600 text-white border-violet-500 shadow-md shadow-violet-900/30'
+                          ? 'bg-teal-600 text-white border-teal-500 shadow-md shadow-teal-900/30'
                           : 'bg-zinc-900/80 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700'
                       }`}
                     >
@@ -609,7 +625,7 @@ export default function Today() {
                   <button
                     type="button"
                     onClick={() => setShowSheet(true)}
-                    className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold px-6 py-3.5 rounded-2xl text-sm transition-colors shadow-lg shadow-violet-900/30 min-h-[48px]"
+                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-semibold px-6 py-3.5 rounded-2xl text-sm transition-colors shadow-lg shadow-teal-900/30 min-h-[48px]"
                   >
                     <Plus className="w-4 h-4" />
                     Add Exercise
@@ -634,7 +650,7 @@ export default function Today() {
                 else delete cardRefs.current[name];
               }}
               className={`bg-zinc-900 border rounded-2xl overflow-hidden transition-shadow ${
-                isActive ? 'border-violet-500 ring-2 ring-violet-500/35 shadow-lg shadow-violet-950/40' : 'border-zinc-800'
+                isActive ? 'border-teal-500 ring-2 ring-teal-500/35 shadow-lg shadow-teal-950/40' : 'border-zinc-800'
               }`}
             >
               {/* Card header */}
@@ -651,7 +667,7 @@ export default function Today() {
                 <button
                   onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`)}
                   title="View exercise history"
-                  className="text-zinc-600 hover:text-violet-400 p-2 rounded-lg transition-colors flex-shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  className="text-zinc-600 hover:text-teal-400 p-2 rounded-lg transition-colors flex-shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center"
                 >
                   <TrendingUp className="w-4 h-4" />
                 </button>
@@ -660,7 +676,7 @@ export default function Today() {
                   className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 min-h-[32px] ${
                     isAdding
                       ? 'bg-zinc-800 text-zinc-500'
-                      : 'bg-violet-600/20 text-violet-400 hover:bg-violet-600/30'
+                      : 'bg-teal-600/20 text-teal-400 hover:bg-teal-600/30'
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -678,13 +694,13 @@ export default function Today() {
                         <input autoFocus type="number" inputMode="decimal" value={editValues.weightKg}
                           onChange={(e) => setEditValues((v) => ({ ...v, weightKg: e.target.value }))}
                           placeholder="kg"
-                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                         />
                         <span className="text-zinc-600 text-xs">×</span>
                         <input type="number" inputMode="numeric" value={editValues.reps}
                           onChange={(e) => setEditValues((v) => ({ ...v, reps: e.target.value }))}
                           placeholder="reps"
-                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                         />
                         <div className="flex-1" />
                         <button onClick={handleSaveEdit} disabled={saving}
@@ -697,31 +713,49 @@ export default function Today() {
                         </button>
                       </div>
                     ) : (
-                      <div
-                        onClick={() => setTappedSetId(tappedSetId === set.id ? null : set.id)}
-                        className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none active:bg-zinc-800/40 transition-colors"
-                      >
-                        <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
-                        <span className="text-zinc-300 text-sm flex-1">
-                          {set.weight_kg > 0 ? `${set.weight_kg} kg` : set.reps > 0 ? <span className="text-teal-400 font-medium">BW</span> : null}
-                          {set.weight_kg > 0 && set.reps > 0 ? ' × ' : ''}
-                          {set.reps > 0 ? `${set.reps} reps` : ''}
-                          {!set.weight_kg && !set.reps && set.distance > 0 ? `${set.distance} ${set.distance_unit || 'km'}` : ''}
-                          {set.duration_seconds > 0 ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}` : ''}
-                        </span>
-                        {set.set_type === 'dropset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">Drop</span>}
-                        {set.set_type === 'superset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">Super</span>}
+                      <div>
+                        <div
+                          onClick={() => setTappedSetId(tappedSetId === set.id ? null : set.id)}
+                          className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none active:bg-zinc-800/40 transition-colors"
+                        >
+                          <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
+                          <span className="text-zinc-300 text-sm flex-1">
+                            {set.weight_kg > 0 ? `${set.weight_kg} kg` : set.reps > 0 ? <span className="text-teal-400 font-medium">BW</span> : null}
+                            {set.weight_kg > 0 && set.reps > 0 ? ' × ' : ''}
+                            {set.reps > 0 ? `${set.reps} reps` : ''}
+                            {!set.weight_kg && !set.reps && set.distance > 0 ? `${set.distance} ${set.distance_unit || 'km'}` : ''}
+                            {set.duration_seconds > 0 ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}` : ''}
+                          </span>
+                          {set.set_type === 'dropset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">Drop</span>}
+                          {set.set_type === 'superset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">Super</span>}
+                          {tappedSetId === set.id && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
+                                className="text-zinc-500 hover:text-teal-400 p-1.5 rounded transition-colors flex-shrink-0">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
+                                className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        {/* Saved note preview (shown when not tapped) */}
+                        {setNotes[set.id] && tappedSetId !== set.id && (
+                          <p className="text-zinc-500 text-xs px-4 pb-2 pl-12">{setNotes[set.id]}</p>
+                        )}
+                        {/* Note textarea (shown when tapped) */}
                         {tappedSetId === set.id && (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
-                              className="text-zinc-500 hover:text-violet-400 p-1.5 rounded transition-colors flex-shrink-0">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
-                              className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
+                          <div className="px-4 pb-3 pl-12">
+                            <textarea
+                              defaultValue={setNotes[set.id] || ''}
+                              onBlur={(e) => saveSetNote(set.id, e.target.value)}
+                              placeholder="Add note\u2026"
+                              rows={1}
+                              className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 resize-none"
+                            />
+                          </div>
                         )}
                       </div>
                     )}
@@ -736,16 +770,16 @@ export default function Today() {
                     <input autoFocus type="number" inputMode="decimal" value={addForm.weightKg}
                       onChange={(e) => setAddForm((f) => ({ ...f, weightKg: e.target.value }))}
                       placeholder="Weight (kg)"
-                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     <span className="text-zinc-600 text-xs flex-shrink-0">×</span>
                     <input type="number" inputMode="numeric" value={addForm.reps}
                       onChange={(e) => setAddForm((f) => ({ ...f, reps: e.target.value }))}
                       placeholder="Reps"
-                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     <button onClick={handleSaveSet} disabled={saving}
-                      className="bg-violet-600 hover:bg-violet-500 active:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex-shrink-0">
+                      className="bg-teal-600 hover:bg-teal-500 active:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex-shrink-0">
                       {saving ? '…' : 'Add'}
                     </button>
                     <button onClick={() => setAddingTo(null)}
@@ -758,7 +792,7 @@ export default function Today() {
                       <button key={val} onClick={() => setAddForm((f) => ({ ...f, setType: val }))}
                         className={`text-xs px-3 py-1 rounded-lg border font-medium transition-colors ${
                           addForm.setType === val
-                            ? 'bg-violet-600 text-white border-violet-600'
+                            ? 'bg-teal-600 text-white border-teal-600'
                             : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:text-zinc-300'
                         }`}>
                         {label}

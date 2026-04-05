@@ -133,13 +133,13 @@ export default function Import() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
         <label className="block text-sm font-medium text-zinc-300 mb-3">Upload CSV File</label>
         <div
-          className="border-2 border-dashed border-zinc-700 hover:border-violet-500 rounded-xl p-8 text-center transition-colors cursor-pointer"
+          className="border-2 border-dashed border-zinc-700 hover:border-teal-500 rounded-xl p-8 text-center transition-colors cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="w-8 h-8 text-zinc-500 mx-auto mb-2" />
           <p className="text-zinc-400 text-sm">
             {fileName ? (
-              <span className="flex items-center justify-center gap-2 text-violet-300">
+              <span className="flex items-center justify-center gap-2 text-teal-300">
                 <FileText className="w-4 h-4" />
                 {fileName}
               </span>
@@ -217,7 +217,7 @@ export default function Import() {
           </div>
           <div className="w-full bg-zinc-800 rounded-full h-2">
             <div
-              className="bg-violet-600 h-2 rounded-full transition-all duration-200"
+              className="bg-teal-600 h-2 rounded-full transition-all duration-200"
               style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
             />
           </div>
@@ -228,7 +228,7 @@ export default function Import() {
         <button
           onClick={handleImport}
           disabled={importing}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
         >
           <Upload className="w-4 h-4" />
           {importing

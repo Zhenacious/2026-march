@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -Command '[System.Environment]::SetEnvironmentVariable\\(\"PATH\", $env:PATH + \";$env:APPDATA\\\\npm;C:\\\\Program Files\\\\nodejs\", \"User\"\\)')",
+      "Bash(gh api:*)",
+      "Bash(git config:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Read(//tmp/**)",
+      "Bash(echo EXIT:$?)",
+      "Bash(npx --yes acorn --ecma2020 --module --allow-import-export-everywhere src/pages/Today.jsx)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}

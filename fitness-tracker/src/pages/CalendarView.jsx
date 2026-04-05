@@ -210,8 +210,8 @@ export default function CalendarView() {
                   className={`
                     aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors relative pb-3
                     ${!inMonth ? 'opacity-25' : ''}
-                    ${selected ? 'bg-violet-600 text-white' : hasWorkout ? 'bg-violet-950 hover:bg-violet-900 text-violet-200' : 'hover:bg-zinc-800 text-zinc-300'}
-                    ${today && !selected ? 'ring-1 ring-violet-500' : ''}
+                    ${selected ? 'bg-teal-600 text-white' : hasWorkout ? 'bg-teal-950 hover:bg-teal-900 text-teal-200' : 'hover:bg-zinc-800 text-zinc-300'}
+                    ${today && !selected ? 'ring-1 ring-teal-500' : ''}
                   `}
                 >
                   <span className="text-xs font-medium">{format(day, 'd')}</span>
@@ -221,7 +221,7 @@ export default function CalendarView() {
                         ? dots.slice(0, 4).map((cls, i) => (
                             <span key={i} className={`w-1 h-1 rounded-full ${cls}`} />
                           ))
-                        : <span className="w-1 h-1 rounded-full bg-violet-400" />
+                        : <span className="w-1 h-1 rounded-full bg-teal-400" />
                       }
                     </div>
                   )}
@@ -232,7 +232,7 @@ export default function CalendarView() {
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-500">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded ring-1 ring-violet-500 bg-zinc-900" />
+              <span className="w-3 h-3 rounded ring-1 ring-teal-500 bg-zinc-900" />
               Today
             </div>
             {LEGEND_ITEMS.map(({ label, color }) => (
@@ -290,7 +290,7 @@ export default function CalendarView() {
 
             <button
               onClick={() => navigate(`/today?date=${format(selectedDay, 'yyyy-MM-dd')}`)}
-              className="mt-4 flex items-center justify-center gap-2 w-full bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              className="mt-4 flex items-center justify-center gap-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               Go to Workout
               <ArrowRight className="w-4 h-4" />

@@ -11,7 +11,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     return (
       <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs shadow-xl">
         <p className="text-zinc-300 font-medium mb-1">{label}</p>
-        <p className="text-violet-400">{payload[0].value} kg</p>
+        <p className="text-teal-400">{payload[0].value} kg</p>
       </div>
     );
   }
@@ -65,8 +65,8 @@ export default function BodyWeightTracker() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-1">
-        <div className="bg-violet-600/20 p-2 rounded-xl">
-          <Scale className="w-5 h-5 text-violet-400" />
+        <div className="bg-teal-600/20 p-2 rounded-xl">
+          <Scale className="w-5 h-5 text-teal-400" />
         </div>
         <h1 className="text-2xl font-bold text-zinc-100">Body Weight</h1>
       </div>
@@ -95,7 +95,7 @@ export default function BodyWeightTracker() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -108,12 +108,12 @@ export default function BodyWeightTracker() {
               value={weightInput}
               onChange={(e) => setWeightInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
             Log
@@ -132,7 +132,7 @@ export default function BodyWeightTracker() {
               <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
               <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" domain={['auto', 'auto']} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="Weight (kg)" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: '#8b5cf6', r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="Weight (kg)" stroke="#14b8a6" strokeWidth={2} dot={{ fill: '#14b8a6', r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

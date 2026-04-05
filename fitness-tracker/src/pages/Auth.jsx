@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Dumbbell } from 'lucide-react';
+import { Waves } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -40,9 +40,9 @@ export default function Auth() {
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="bg-zinc-800 p-3 rounded-2xl mb-4">
-            <Dumbbell className="w-8 h-8 text-violet-400" />
+            <Waves className="w-8 h-8 text-teal-400" />
           </div>
-          <h1 className="text-3xl font-bold text-zinc-100">FitTrack</h1>
+          <h1 className="text-3xl font-bold text-zinc-100"><span className="bg-gradient-to-r from-teal-400 to-cyan-300 bg-clip-text text-transparent">Dolphin</span>FitTrack</h1>
           <p className="text-zinc-400 mt-1 text-sm">
             {isLogin ? 'Sign in to your account' : 'Create a new account'}
           </p>
@@ -71,7 +71,7 @@ export default function Auth() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
 
@@ -86,14 +86,14 @@ export default function Auth() {
                 required
                 placeholder="••••••••"
                 minLength={6}
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors"
+              className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors"
             >
               {loading ? 'Please wait…' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
@@ -102,7 +102,7 @@ export default function Auth() {
           <div className="mt-6 text-center">
             <button
               onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); }}
-              className="text-sm text-zinc-400 hover:text-violet-400 transition-colors"
+              className="text-sm text-zinc-400 hover:text-teal-400 transition-colors"
             >
               {isLogin
                 ? "Don't have an account? Sign up"
