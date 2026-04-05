@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Dumbbell, CalendarDays, TrendingUp, Plus, Upload } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Activity, Dumbbell, CalendarDays, TrendingUp, Plus, Upload, Flame, Trophy } from 'lucide-react';
+import { format, parseISO, subDays } from 'date-fns';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -13,6 +13,8 @@ export default function Dashboard() {
     totalSets: 0,
     mostFrequent: '—',
     lastWorkout: '—',
+    streak: 0,
+    sevenDays: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,7 +52,25 @@ export default function Dashboard() {
             mostFrequent = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
           }
         }
-        setStats({ totalWorkouts, totalSets, mostFrequent, lastWorkout });
+        // Streak — consecutive days with workouts ending today or yesterday
+        const dateSet = new Set((workouts || []).map((w) => w.date));
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        let streakStart = new Date();
+        if (!dateSet.has(todayStr)) streakStart = subDays(streakStart, 1);
+        let streak = 0;
+        let cur = streakStart;
+        while (dateSet.has(format(cur, 'yyyy-MM-dd'))) {
+          streak++;
+          cur = subDays(cur, 1);
+        }
+
+        // Last 7 days activity
+        const sevenDays = Array.from({ length: 7 }, (_, i) => {
+          const d = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
+          return { date: d, active: dateSet.has(d), label: format(subDays(new Date(), 6 - i), 'EEE') };
+        });
+
+        setStats({ totalWorkouts, totalSets, mostFrequent, lastWorkout, streak, sevenDays });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -108,6 +128,37 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Streak + 7-day activity */}
+      {!loading && (
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          {/* Streak */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+            <div className="bg-orange-500/15 rounded-xl p-3 flex-shrink-0">
+              <Flame className="w-6 h-6 text-orange-400" />
+            </div>
+            <div>
+              <p className="text-zinc-500 text-xs mb-0.5">Streak</p>
+              <p className="text-zinc-100 text-2xl font-bold leading-none">
+                {stats.streak}<span className="text-zinc-500 text-sm font-normal ml-1">days</span>
+              </p>
+            </div>
+          </div>
+
+          {/* 7-day activity */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+            <p className="text-zinc-500 text-xs mb-3">Last 7 days</p>
+            <div className="flex items-end justify-between gap-1">
+              {stats.sevenDays.map(({ date, active, label }) => (
+                <div key={date} className="flex flex-col items-center gap-1.5 flex-1">
+                  <div className={`w-full rounded-md ${active ? 'bg-violet-500 h-5' : 'bg-zinc-800 h-3'} transition-all`} />
+                  <span className="text-zinc-600 text-[10px]">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Secondary shortcuts */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         <button
@@ -116,6 +167,13 @@ export default function Dashboard() {
         >
           <TrendingUp className="w-6 h-6 text-violet-400" />
           <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Progress</span>
+        </button>
+        <button
+          onClick={() => navigate('/records')}
+          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
+        >
+          <Trophy className="w-6 h-6 text-amber-400" />
+          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Records</span>
         </button>
         <button
           onClick={() => navigate('/exercises')}
@@ -130,13 +188,6 @@ export default function Dashboard() {
         >
           <Upload className="w-6 h-6 text-blue-400" />
           <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Import</span>
-        </button>
-        <button
-          onClick={() => navigate('/today')}
-          className="flex flex-col items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl px-4 py-4 transition-colors group"
-        >
-          <Activity className="w-6 h-6 text-amber-400" />
-          <span className="text-zinc-400 text-xs group-hover:text-zinc-200 transition-colors text-center">Workouts</span>
         </button>
       </div>
 

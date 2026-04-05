@@ -2,32 +2,10 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Search, Dumbbell, Sparkles, Pencil, Check, X, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight } from 'lucide-react';
+import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS } from '../lib/categories';
 
-const CATEGORY_COLORS = {
-  chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
-  back:      { dot: 'bg-blue-500',   badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-  abs:       { dot: 'bg-amber-400',  badge: 'bg-amber-400/20 text-amber-300 border-amber-400/40' },
-  legs:      { dot: 'bg-green-500',  badge: 'bg-green-500/20 text-green-300 border-green-500/40' },
-  triceps:   { dot: 'bg-orange-500', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
-  biceps:    { dot: 'bg-violet-500', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/40' },
-  shoulders: { dot: 'bg-sky-500',    badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
-  mobility:  { dot: 'bg-teal-500',   badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
-};
-
-const MUSCLE_GROUPS = [
-  { label: 'All',       categories: null },
-  { label: 'Chest',     categories: ['chest'] },
-  { label: 'Back',      categories: ['back'] },
-  { label: 'Arms',      categories: ['biceps', 'triceps'] },
-  { label: 'Legs',      categories: ['legs'] },
-  { label: 'Shoulders', categories: ['shoulders'] },
-  { label: 'Abs',       categories: ['abs'] },
-  { label: 'Mobility',  categories: ['mobility'] },
-  { label: 'Uncategorized', categories: [''] },
-];
-
-const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
+const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categories: [''] }];
 
 export default function Exercises() {
   const { user } = useAuth();
@@ -41,8 +19,6 @@ export default function Exercises() {
   const [newCategory, setNewCategory] = useState('');
   const [adding, setAdding] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [categorizing, setCategorizing] = useState(false);
-  const [categorizeStatus, setCategorizeStatus] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -141,61 +117,6 @@ export default function Exercises() {
     }
   }
 
-  async function handleAutoCategorize() {
-    const uncategorized = exercises.filter((ex) => !ex.category || ex.category.trim() === '');
-    if (uncategorized.length === 0) {
-      setCategorizeStatus('All exercises already have a category!');
-      setTimeout(() => setCategorizeStatus(''), 3000);
-      return;
-    }
-
-    setCategorizing(true);
-    setCategorizeStatus(`Categorizing ${uncategorized.length} exercises with AI…`);
-    setError('');
-
-    try {
-      const names = uncategorized.map((ex) => ex.name);
-      const res = await fetch('/api/categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exercises: names }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Categorization failed');
-      }
-
-      const categoryMap = await res.json();
-
-      // Batch update in Supabase
-      const updates = uncategorized
-        .filter((ex) => categoryMap[ex.name])
-        .map((ex) => ({
-          id: ex.id,
-          user_id: user.id,
-          name: ex.name,
-          category: categoryMap[ex.name].toLowerCase(),
-        }));
-
-      for (const update of updates) {
-        await supabase
-          .from('exercises')
-          .update({ category: update.category })
-          .eq('id', update.id);
-      }
-
-      setCategorizeStatus(`Done! Categorized ${updates.length} exercises.`);
-      setTimeout(() => setCategorizeStatus(''), 4000);
-      await fetchExercises();
-    } catch (err) {
-      setError(err.message);
-      setCategorizeStatus('');
-    } finally {
-      setCategorizing(false);
-    }
-  }
-
   // Filter by search + active muscle group tab — wrapped in useMemo so it only
   // recalculates when exercises, search term, or selected tab actually change.
   const { filtered, grouped, sortedCategories } = useMemo(() => {
@@ -237,16 +158,6 @@ export default function Exercises() {
           <p className="text-zinc-400 text-sm mt-0.5">{exercises.length} exercises total</p>
         </div>
         <div className="flex items-center gap-2">
-          {uncategorizedCount > 0 && (
-            <button
-              onClick={handleAutoCategorize}
-              disabled={categorizing}
-              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 border border-zinc-700 text-zinc-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-            >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              {categorizing ? 'Categorizing…' : `Auto-categorize (${uncategorizedCount})`}
-            </button>
-          )}
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
@@ -262,12 +173,6 @@ export default function Exercises() {
           {error}
         </div>
       )}
-      {categorizeStatus && (
-        <div className="bg-amber-950 border border-amber-800 text-amber-300 px-4 py-3 rounded-lg mb-4 text-sm">
-          {categorizeStatus}
-        </div>
-      )}
-
       {showForm && (
         <form
           onSubmit={handleAdd}

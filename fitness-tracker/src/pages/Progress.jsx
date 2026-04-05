@@ -16,6 +16,7 @@ import {
 import { TrendingUp, Star } from 'lucide-react';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
+import { MUSCLE_GROUPS } from '../lib/categories';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -33,16 +34,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const MUSCLE_GROUPS = [
-  { label: 'All',       categories: null },
-  { label: 'Chest',     categories: ['chest'] },
-  { label: 'Back',      categories: ['back'] },
-  { label: 'Arms',      categories: ['biceps', 'triceps'] },
-  { label: 'Legs',      categories: ['legs'] },
-  { label: 'Shoulders', categories: ['shoulders'] },
-  { label: 'Abs',       categories: ['abs'] },
-  { label: 'Mobility',  categories: ['mobility'] },
-];
 
 export default function Progress() {
   const { user } = useAuth();

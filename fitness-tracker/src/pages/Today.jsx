@@ -3,34 +3,89 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
-import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText } from 'lucide-react';
+import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
 
-const CATEGORY_COLORS = {
-  chest:     { dot: 'bg-rose-500',   badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',   label: 'Chest' },
-  back:      { dot: 'bg-blue-500',   badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',   label: 'Back' },
-  abs:       { dot: 'bg-amber-400',  badge: 'bg-amber-400/20 text-amber-300 border-amber-400/40', label: 'Abs' },
-  legs:      { dot: 'bg-green-500',  badge: 'bg-green-500/20 text-green-300 border-green-500/40', label: 'Legs' },
-  triceps:   { dot: 'bg-orange-500', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40', label: 'Triceps' },
-  biceps:    { dot: 'bg-violet-500', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/40', label: 'Biceps' },
-  shoulders: { dot: 'bg-sky-500',    badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40',       label: 'Shoulders' },
-  mobility:  { dot: 'bg-teal-500',   badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40',   label: 'Mobility' },
-};
+// FILTER_TABS is just MUSCLE_GROUPS — alias so the sheet component still works
+const FILTER_TABS = MUSCLE_GROUPS;
 
 // Returns today's date as a yyyy-MM-dd string, evaluated fresh each call
 function getTodayStr() {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
-const FILTER_TABS = [
-  { label: 'All',       categories: null },
-  { label: 'Chest',     categories: ['chest'] },
-  { label: 'Back',      categories: ['back'] },
-  { label: 'Arms',      categories: ['biceps', 'triceps'] },
-  { label: 'Legs',      categories: ['legs'] },
-  { label: 'Shoulders', categories: ['shoulders'] },
-  { label: 'Abs',       categories: ['abs'] },
-  { label: 'Mobility',  categories: ['mobility'] },
-];
+// ─── Templates bottom sheet ───────────────────────────────────────────────────
+function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave, onClose }) {
+  const [saveName, setSaveName] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900" onClick={onClose}>
+      <div className="flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-12 pb-3 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-violet-400" />
+            <h2 className="text-zinc-100 font-semibold text-base">Templates</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-4 py-4 pb-8 space-y-4">
+          {/* Save current workout as a template */}
+          {currentExercises.length > 0 && (
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4">
+              <p className="text-zinc-400 text-xs font-medium mb-3">Save today's exercises as a template</p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="e.g. Push Day"
+                  className="flex-1 bg-zinc-700 border border-zinc-600 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                <button
+                  onClick={() => { if (saveName.trim()) { onSave(saveName); setSaveName(''); } }}
+                  disabled={!saveName.trim()}
+                  className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+              <p className="text-zinc-600 text-xs">{currentExercises.join(' · ')}</p>
+            </div>
+          )}
+
+          {/* Saved templates list */}
+          {templates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-600">
+              <BookOpen className="w-8 h-8 opacity-40" />
+              <p className="text-sm text-center">No templates saved yet.<br />Log a workout, then save it as a template.</p>
+            </div>
+          ) : (
+            templates.map((t) => (
+              <div key={t.id} className="bg-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-zinc-100 font-semibold text-sm">{t.name}</span>
+                  <button onClick={() => onDelete(t.id)} className="text-zinc-600 hover:text-red-400 p-1 rounded transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-zinc-500 text-xs mb-3">{t.exercises.join(' · ')}</p>
+                <button
+                  onClick={() => onLoad(t)}
+                  className="w-full bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/40 text-violet-300 text-sm font-semibold py-2 rounded-xl transition-colors"
+                >
+                  Load template
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
 // Shows a search field, muscle-group filter tabs, and a scrollable list.
@@ -192,6 +247,20 @@ export default function Today() {
   const [saving, setSaving] = useState(false);
   /** Which exercise row is “focused” — drives sidebar highlight and scroll-into-view after add. */
   const [activeExercise, setActiveExercise] = useState(null);
+
+  // Session note — one text note per workout date, saved to localStorage
+  const [note, setNote] = useState('');
+  const [noteExpanded, setNoteExpanded] = useState(false);
+
+  // Workout templates — stored in localStorage
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('fittrack_templates') || '[]'); }
+    catch { return []; }
+  });
+
+  // Exercises added from a template but with no sets yet — shown as empty cards
+  const [pendingExercises, setPendingExercises] = useState([]);
   const cardRefs = useRef({});
 
   const categoryMap = useMemo(
@@ -214,8 +283,12 @@ export default function Today() {
       order.push(addingTo);
       map[addingTo] = [];
     }
+    // Show cards for template exercises loaded but not yet having sets
+    pendingExercises.forEach((name) => {
+      if (!map[name]) { order.push(name); map[name] = []; }
+    });
     return order.map((name) => ({ name, sets: map[name] }));
-  }, [sets, addingTo]);
+  }, [sets, addingTo, pendingExercises]);
 
   // After picking an exercise or tapping the sidebar, scroll its card into view (smooth, doesn’t resize the Safari window).
   useEffect(() => {
@@ -244,6 +317,13 @@ export default function Today() {
     setActiveExercise(null);
     setEditingSetId(null);
     setTappedSetId(null);
+    setPendingExercises([]);
+    try {
+      const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
+      const dateNote = allNotes[selectedDate] || '';
+      setNote(dateNote);
+      setNoteExpanded(!!dateNote);
+    } catch { setNote(''); setNoteExpanded(false); }
     supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle()
       .then(async ({ data: workout }) => {
         if (!workout) { setSets([]); setLoading(false); return; }
@@ -349,6 +429,38 @@ export default function Today() {
     setTappedSetId(null);
   }
 
+  function handleSaveNote(value) {
+    try {
+      const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
+      if (value.trim()) allNotes[selectedDate] = value.trim();
+      else delete allNotes[selectedDate];
+      localStorage.setItem('fittrack_notes', JSON.stringify(allNotes));
+    } catch {}
+  }
+
+  function handleLoadTemplate(template) {
+    setShowTemplates(false);
+    const newPending = template.exercises.filter(
+      (name) => !sets.some((s) => s.exercise_name.toLowerCase() === name.toLowerCase())
+    );
+    setPendingExercises(newPending);
+    if (newPending.length > 0) setActiveExercise(newPending[0]);
+  }
+
+  function handleSaveTemplate(name) {
+    const exerciseNames = groupedExercises.map((g) => g.name);
+    const newTemplate = { id: Date.now().toString(), name: name.trim(), exercises: exerciseNames };
+    const updated = [...templates, newTemplate];
+    setTemplates(updated);
+    localStorage.setItem('fittrack_templates', JSON.stringify(updated));
+  }
+
+  function handleDeleteTemplate(id) {
+    const updated = templates.filter((t) => t.id !== id);
+    setTemplates(updated);
+    localStorage.setItem('fittrack_templates', JSON.stringify(updated));
+  }
+
   async function handleSaveEdit() {
     setSaving(true);
     try {
@@ -384,6 +496,13 @@ export default function Today() {
           <p className="text-zinc-500 text-sm">{subheading}</p>
         </div>
         <button
+          onClick={() => setShowTemplates(true)}
+          title="Workout templates"
+          className="text-zinc-500 hover:text-violet-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0"
+        >
+          <BookOpen className="w-5 h-5" />
+        </button>
+        <button
           onClick={goToNextDay}
           disabled={isToday}
           className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 p-2 rounded-xl hover:bg-zinc-800 disabled:hover:bg-transparent transition-colors flex-shrink-0"
@@ -403,6 +522,28 @@ export default function Today() {
           </button>
         </div>
       )}
+
+      {/* Session note */}
+      <div className="max-w-lg mx-auto px-4 pb-2">
+        {noteExpanded ? (
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={(e) => handleSaveNote(e.target.value)}
+            placeholder="Session note…"
+            rows={2}
+            className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 resize-none"
+          />
+        ) : (
+          <button
+            onClick={() => setNoteExpanded(true)}
+            className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Add session note
+          </button>
+        )}
+      </div>
 
       {/* Sidebar (Today list) + main column: on md+ they sit side by side; on phones the list is a horizontal strip above the cards */}
       <div className="px-4 md:px-6">
@@ -640,6 +781,17 @@ export default function Today() {
           exercises={exercises}
           onSelect={handlePickExercise}
           onClose={() => setShowSheet(false)}
+        />
+      )}
+
+      {showTemplates && (
+        <TemplatesSheet
+          templates={templates}
+          currentExercises={groupedExercises.map((g) => g.name)}
+          onLoad={handleLoadTemplate}
+          onDelete={handleDeleteTemplate}
+          onSave={handleSaveTemplate}
+          onClose={() => setShowTemplates(false)}
         />
       )}
     </div>

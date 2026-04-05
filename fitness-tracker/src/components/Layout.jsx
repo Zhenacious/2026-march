@@ -13,16 +13,18 @@ import {
   Scale,
   LayoutDashboard,
   ChevronUp,
+  Trophy,
 } from 'lucide-react';
 
 /** Secondary destinations — opened from the bottom “More” sheet (keeps the main chrome stable in mobile Safari / PWA). */
 const moreNavItems = [
-  { to: '/exercises',   label: 'Exercises',   icon: Library },
-  { to: '/calendar',    label: 'Calendar',    icon: Calendar },
-  { to: '/progress',    label: 'Progress',    icon: TrendingUp },
-  { to: '/body-weight', label: 'Body weight', icon: Scale },
-  { to: '/dashboard',   label: 'Stats',       icon: LayoutDashboard },
-  { to: '/import',      label: 'Import',      icon: Upload },
+  { to: '/exercises',   label: 'Exercises',        icon: Library },
+  { to: '/records',     label: 'Personal Records', icon: Trophy },
+  { to: '/calendar',    label: 'Calendar',         icon: Calendar },
+  { to: '/progress',    label: 'Progress',         icon: TrendingUp },
+  { to: '/body-weight', label: 'Body weight',      icon: Scale },
+  { to: '/dashboard',   label: 'Stats',            icon: LayoutDashboard },
+  { to: '/import',      label: 'Import',           icon: Upload },
 ];
 
 export default function Layout() {
