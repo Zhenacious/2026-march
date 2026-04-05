@@ -49,7 +49,9 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
     const tab = FILTER_TABS.find((t) => t.label === activeTab);
     return exercises.filter((ex) => {
       const cat = (ex.category || '').toLowerCase();
-      const matchesSearch = !search.trim() || ex.name.toLowerCase().includes(search.trim().toLowerCase());
+      const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const nameLower = ex.name.toLowerCase();
+      const matchesSearch = words.length === 0 || words.every((w) => nameLower.includes(w));
       const matchesTab = !tab.categories || tab.categories.includes(cat);
       return matchesSearch && matchesTab;
     });
@@ -62,16 +64,15 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60"
+      className="fixed inset-0 z-50 flex flex-col bg-zinc-900"
       onClick={onClose}
     >
       <div
-        className="bg-zinc-900 rounded-t-3xl border-t border-zinc-800 flex flex-col"
-        style={{ maxHeight: '82vh' }}
+        className="flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Title + close */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3">
+        {/* Title + close — pt accounts for phone notch/status bar */}
+        <div className="flex items-center justify-between px-5 pt-12 pb-3">
           <h2 className="text-zinc-100 font-semibold text-base">Add Exercise</h2>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
             <X className="w-5 h-5" />
@@ -120,7 +121,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
         </div>
 
         {/* Exercise list */}
-        <div className="overflow-y-auto flex-1 px-2 pb-6">
+        <div className="overflow-y-auto flex-1 px-2 pb-8">
           {canCreate && (
             <button
               onClick={() => onSelect(search.trim())}
@@ -416,6 +417,15 @@ export default function Today() {
             <aside className="mb-4 md:mb-0 md:w-52 flex-shrink-0 md:sticky md:top-2 md:self-start">
               <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wide mb-2 px-0.5">Today</p>
               <div className="flex md:flex-col gap-2 overflow-x-auto pb-1 md:overflow-y-auto md:max-h-[70vh] [-webkit-overflow-scrolling:touch]">
+                {/* Add exercise button — first so it's always immediately visible */}
+                <button
+                  type="button"
+                  onClick={() => { setShowSheet(true); setAddingTo(null); }}
+                  className="flex-shrink-0 md:w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold min-h-[48px] transition-colors bg-violet-600/20 border border-violet-500/40 text-violet-400 hover:bg-violet-600/30 hover:border-violet-500/70"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="md:inline">Add</span>
+                </button>
                 {groupedExercises.map(({ name }) => {
                   const cat = (categoryMap[name.toLowerCase()] || '').toLowerCase();
                   const color = CATEGORY_COLORS[cat] || null;
@@ -440,15 +450,6 @@ export default function Today() {
                     </button>
                   );
                 })}
-                {/* Add exercise button inline in the strip */}
-                <button
-                  type="button"
-                  onClick={() => { setShowSheet(true); setAddingTo(null); }}
-                  className="flex-shrink-0 md:w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold min-h-[48px] transition-colors border border-dashed border-zinc-700 text-zinc-500 hover:text-violet-400 hover:border-violet-500/50 hover:bg-violet-500/5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="md:inline hidden">Add exercise</span>
-                </button>
               </div>
             </aside>
           )}
