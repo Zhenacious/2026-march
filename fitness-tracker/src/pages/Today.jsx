@@ -245,7 +245,7 @@ export default function Today() {
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({ weightKg: '', reps: '', setType: 'normal' });
   const [saving, setSaving] = useState(false);
-  /** Which exercise row is “focused” — drives sidebar highlight and scroll-into-view after add. */
+  /** Which exercise row is "focused" — drives sidebar highlight and scroll-into-view after add. */
   const [activeExercise, setActiveExercise] = useState(null);
 
   // Cached historical stats per exercise: { lastSet, bestE1RM, lastSessionVolume, lastSessionDate }
@@ -257,11 +257,11 @@ export default function Today() {
   // Random motivational line for the empty state — picked once on mount
   const [motivational] = useState(() => {
     const lines = [
-      “Every rep counts. Let's go.”,
-      “Dive in. Your best set is waiting.”,
-      “The ocean wasn't built in a day.”,
-      “Make today's workout count.”,
-      “Strong starts here.”,
+      "Every rep counts. Let's go.",
+      "Dive in. Your best set is waiting.",
+      "The ocean wasn't built in a day.",
+      "Make today's workout count.",
+      "Strong starts here.",
     ];
     return lines[Math.floor(Math.random() * lines.length)];
   });
@@ -324,7 +324,7 @@ export default function Today() {
     return order.map((name) => ({ name, sets: map[name] }));
   }, [sets, addingTo, pendingExercises]);
 
-  // After picking an exercise or tapping the sidebar, scroll its card into view (smooth, doesn’t resize the Safari window).
+  // After picking an exercise or tapping the sidebar, scroll its card into view (smooth, doesn't resize the Safari window).
   useEffect(() => {
     if (!activeExercise) return;
     const el = cardRefs.current[activeExercise];
