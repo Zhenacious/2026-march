@@ -248,6 +248,24 @@ export default function Today() {
   /** Which exercise row is “focused” — drives sidebar highlight and scroll-into-view after add. */
   const [activeExercise, setActiveExercise] = useState(null);
 
+  // Cached historical stats per exercise: { lastSet, bestE1RM, lastSessionVolume, lastSessionDate }
+  const [exerciseStats, setExerciseStats] = useState({});
+  // ID of the set that was just saved — drives a brief green flash
+  const [flashSetId, setFlashSetId] = useState(null);
+  // Set IDs that beat the user's all-time e1RM at the moment they were logged
+  const [prSetIds, setPrSetIds] = useState(new Set());
+  // Random motivational line for the empty state — picked once on mount
+  const [motivational] = useState(() => {
+    const lines = [
+      “Every rep counts. Let's go.”,
+      “Dive in. Your best set is waiting.”,
+      “The ocean wasn't built in a day.”,
+      “Make today's workout count.”,
+      “Strong starts here.”,
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  });
+
   // Per-set notes — stored in localStorage under fittrack_set_notes as { [setId]: string }
   const [setNotes, setSetNotes] = useState(() => {
     try { return JSON.parse(localStorage.getItem('fittrack_set_notes') || '{}'); }
@@ -347,6 +365,9 @@ export default function Today() {
           .from('workout_sets').select('*').eq('workout_id', workout.id).order('set_order');
         setSets(setsData || []);
         setLoading(false);
+        // Pre-fetch stats for exercises already in today's workout (background)
+        const names = [...new Set((setsData || []).map((s) => s.exercise_name))];
+        names.forEach((n) => fetchExerciseStats(n));
       });
   }, [user, selectedDate]);
 
@@ -372,6 +393,60 @@ export default function Today() {
     return created.id;
   }
 
+  // Fetch and cache historical stats for an exercise (last set, best e1RM, last session volume).
+  // Returns the stats object so callers can use it immediately.
+  async function fetchExerciseStats(name) {
+    if (exerciseStats[name]) return exerciseStats[name];
+    try {
+      const { data: workouts } = await supabase
+        .from('workouts').select('id, date').eq('user_id', user.id).order('date', { ascending: false });
+      if (!workouts || workouts.length === 0) return null;
+
+      const workoutDateMap = Object.fromEntries(workouts.map((w) => [w.id, w.date]));
+      const { data: historySets } = await supabase
+        .from('workout_sets').select('workout_id, weight_kg, reps, set_type')
+        .in('workout_id', workouts.map((w) => w.id))
+        .eq('exercise_name', name);
+
+      if (!historySets || historySets.length === 0) return null;
+
+      const withDates = historySets
+        .map((s) => ({ ...s, date: workoutDateMap[s.workout_id] }))
+        .filter((s) => s.date && s.date !== selectedDate)
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      if (withDates.length === 0) return null;
+
+      // Most recent set for pre-fill
+      const lastSet = withDates[0];
+
+      // Best e1RM ever (historical)
+      let bestE1RM = 0;
+      withDates.forEach((s) => {
+        if (s.weight_kg > 0 && s.reps > 0) {
+          const e1rm = Math.round(s.weight_kg * (1 + s.reps / 30) * 10) / 10;
+          if (e1rm > bestE1RM) bestE1RM = e1rm;
+        }
+      });
+
+      // Last session volume
+      const byDate = {};
+      withDates.forEach((s) => {
+        if (!byDate[s.date]) byDate[s.date] = [];
+        byDate[s.date].push(s);
+      });
+      const sessionDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+      const lastSessionDate = sessionDates[0];
+      const lastSessionVolume = lastSessionDate
+        ? byDate[lastSessionDate].reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0)
+        : 0;
+
+      const stats = { lastSet, bestE1RM, lastSessionVolume, lastSessionDate };
+      setExerciseStats((prev) => ({ ...prev, [name]: stats }));
+      return stats;
+    } catch { return null; }
+  }
+
   async function handlePickExercise(name) {
     setShowSheet(false);
     const alreadyExists = exercises.some((ex) => ex.name.toLowerCase() === name.toLowerCase());
@@ -382,29 +457,37 @@ export default function Today() {
         .select('id, name, category').single();
       if (newEx) setExercises((prev) => [...prev, newEx].sort((a, b) => a.name.localeCompare(b.name)));
     }
-    const lastSet = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
+    // Pre-fill: today's last set takes priority, fall back to historical
+    const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
+    const stats = todayLast ? exerciseStats[name] || null : await fetchExerciseStats(name);
+    const prefill = todayLast || stats?.lastSet;
     setAddForm({
-      weightKg: lastSet?.weight_kg > 0 ? String(lastSet.weight_kg) : '',
-      reps: lastSet?.reps > 0 ? String(lastSet.reps) : '',
-      setType: lastSet?.set_type || 'normal',
+      weightKg: prefill?.weight_kg > 0 ? String(prefill.weight_kg) : '',
+      reps: prefill?.reps > 0 ? String(prefill.reps) : '',
+      setType: prefill?.set_type || 'normal',
     });
     setAddingTo(name);
     setActiveExercise(name);
     setEditingSetId(null);
     setTappedSetId(null);
+    // Fetch stats in background even if we had a today-set (needed for volume delta + PR checks)
+    if (!exerciseStats[name]) fetchExerciseStats(name);
   }
 
   function handleStartAdd(exerciseName) {
     setActiveExercise(exerciseName);
     if (addingTo === exerciseName) { setAddingTo(null); return; }
-    const lastSet = [...sets].reverse().find((s) => s.exercise_name === exerciseName);
+    const todayLast = [...sets].reverse().find((s) => s.exercise_name === exerciseName);
+    const histLast = exerciseStats[exerciseName]?.lastSet;
+    const prefill = todayLast || histLast;
     setAddForm({
-      weightKg: lastSet?.weight_kg > 0 ? String(lastSet.weight_kg) : '',
-      reps: lastSet?.reps > 0 ? String(lastSet.reps) : '',
-      setType: lastSet?.set_type || 'normal',
+      weightKg: prefill?.weight_kg > 0 ? String(prefill.weight_kg) : '',
+      reps: prefill?.reps > 0 ? String(prefill.reps) : '',
+      setType: prefill?.set_type || 'normal',
     });
     setAddingTo(exerciseName);
     setEditingSetId(null);
+    if (!exerciseStats[exerciseName]) fetchExerciseStats(exerciseName);
   }
 
   async function handleSaveSet() {
@@ -413,15 +496,35 @@ export default function Today() {
     try {
       const workoutId = await ensureWorkout();
       const maxOrder = sets.length > 0 ? Math.max(...sets.map((s) => s.set_order)) : 0;
+      const weight = parseFloat(addForm.weightKg) || 0;
+      const reps = parseInt(addForm.reps, 10) || 0;
       const { data: newSet, error } = await supabase.from('workout_sets').insert({
         workout_id: workoutId, exercise_name: addingTo,
-        weight_kg: parseFloat(addForm.weightKg) || 0, reps: parseInt(addForm.reps, 10) || 0,
+        weight_kg: weight, reps,
         set_order: maxOrder + 1, set_type: addForm.setType,
         distance: 0, distance_unit: 'km', duration_seconds: 0,
       }).select().single();
       if (error) throw error;
       setSets((prev) => [...prev, newSet]);
-      setAddingTo(null);
+
+      // Flash the row green briefly
+      setFlashSetId(newSet.id);
+      setTimeout(() => setFlashSetId(null), 1200);
+
+      // Check for personal record
+      if (weight > 0 && reps > 0) {
+        const e1rm = Math.round(weight * (1 + reps / 30) * 10) / 10;
+        const prevBest = exerciseStats[addingTo]?.bestE1RM || 0;
+        if (e1rm > prevBest) {
+          setPrSetIds((prev) => new Set([...prev, newSet.id]));
+          setExerciseStats((prev) => ({
+            ...prev,
+            [addingTo]: { ...(prev[addingTo] || {}), bestE1RM: e1rm },
+          }));
+        }
+      }
+
+      // Keep form open for next set — do NOT call setAddingTo(null)
     } catch (err) { console.error(err); }
     finally { setSaving(false); }
   }
@@ -614,21 +717,28 @@ export default function Today() {
           <div className="flex-1 min-w-0 max-w-lg mx-auto w-full">
             {/* Empty state */}
             {groupedExercises.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 gap-4 px-4">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-800/80 flex items-center justify-center">
-                  <Dumbbell className="w-7 h-7 text-zinc-600" />
+              <div className="flex flex-col items-center justify-center py-16 gap-5 px-4">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-teal-500/20 to-cyan-500/10 border border-teal-500/20 flex items-center justify-center animate-pulse">
+                    <Dumbbell className="w-9 h-9 text-teal-500/60" />
+                  </div>
                 </div>
-                <p className="text-zinc-500 text-sm text-center leading-relaxed">
-                  {isToday ? 'Nothing logged yet.' : 'No workout on this day.'}
-                </p>
+                <div className="text-center">
+                  <p className="text-zinc-300 font-semibold text-base mb-1">
+                    {isToday ? 'Ready to train?' : 'No workout on this day.'}
+                  </p>
+                  {isToday && (
+                    <p className="text-zinc-600 text-sm">{motivational}</p>
+                  )}
+                </div>
                 {isToday && (
                   <button
                     type="button"
                     onClick={() => setShowSheet(true)}
-                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-semibold px-6 py-3.5 rounded-2xl text-sm transition-colors shadow-lg shadow-teal-900/30 min-h-[48px]"
+                    className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 active:to-cyan-600 text-white font-semibold px-8 py-4 rounded-2xl text-sm transition-all shadow-lg shadow-teal-900/40 min-h-[52px]"
                   >
                     <Plus className="w-4 h-4" />
-                    Add Exercise
+                    Start Workout
                   </button>
                 )}
               </div>
@@ -659,6 +769,24 @@ export default function Today() {
                   ? <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />
                   : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-zinc-700" />}
                 <span className="text-zinc-100 font-semibold text-sm flex-1 truncate">{name}</span>
+                {/* Set count */}
+                {exSets.length > 0 && (
+                  <span className="text-zinc-600 text-xs flex-shrink-0">
+                    {exSets.length} set{exSets.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {/* Volume delta vs last session */}
+                {(() => {
+                  const todayVol = exSets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
+                  const lastVol = exerciseStats[name]?.lastSessionVolume;
+                  if (!lastVol || todayVol === 0) return null;
+                  const delta = Math.round(((todayVol - lastVol) / lastVol) * 100);
+                  return (
+                    <span className={`text-xs font-medium flex-shrink-0 ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {delta >= 0 ? '↑' : '↓'}{Math.abs(delta)}%
+                    </span>
+                  );
+                })()}
                 {color && (
                   <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium flex-shrink-0`}>
                     {color.label}
@@ -716,7 +844,9 @@ export default function Today() {
                       <div>
                         <div
                           onClick={() => setTappedSetId(tappedSetId === set.id ? null : set.id)}
-                          className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none active:bg-zinc-800/40 transition-colors"
+                          className={`px-4 py-3 flex items-center gap-3 cursor-pointer select-none transition-colors duration-700 ${
+                            flashSetId === set.id ? 'bg-emerald-500/15' : 'active:bg-zinc-800/40'
+                          }`}
                         >
                           <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
                           <span className="text-zinc-300 text-sm flex-1">
@@ -728,6 +858,7 @@ export default function Today() {
                           </span>
                           {set.set_type === 'dropset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">Drop</span>}
                           {set.set_type === 'superset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">Super</span>}
+                          {prSetIds.has(set.id) && <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/40 flex-shrink-0 font-semibold">PR!</span>}
                           {tappedSetId === set.id && (
                             <>
                               <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
