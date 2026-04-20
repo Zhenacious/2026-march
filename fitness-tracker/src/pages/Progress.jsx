@@ -42,6 +42,8 @@ export default function Progress() {
   const [exercises, setExercises] = useState([]);      // [{ name, category }]
   const [selectedExercise, setSelectedExercise] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
+  // Keep a ref so the tab-change effect can read exercises without depending on them
+  const exercisesRef = React.useRef([]);
   const [defaultExercise, setDefaultExercise] = useState(
     () => localStorage.getItem('progress_default_exercise') || ''
   );
@@ -82,6 +84,7 @@ export default function Progress() {
       (exData || []).forEach((ex) => { catMap[ex.name] = ex.category || ''; });
 
       const withCats = uniqueNames.map((name) => ({ name, category: catMap[name] || '' }));
+      exercisesRef.current = withCats;
       setExercises(withCats);
       const saved = localStorage.getItem('progress_default_exercise');
       const initial = saved && withCats.some((e) => e.name === saved) ? saved : withCats[0]?.name || '';
@@ -90,21 +93,18 @@ export default function Progress() {
     fetchExercises();
   }, [user]);
 
-  // When group changes, reset selected exercise only if current selection isn't in the filtered list
+  // When the user switches group tabs, reset to first exercise in that group.
+  // Reads exercises via ref so this effect only runs on tab changes, not on initial load —
+  // that way fetchExercises can set the default without being overwritten.
   useEffect(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
-    const filtered = exercises.filter((ex) => {
+    const filtered = exercisesRef.current.filter((ex) => {
       if (group.categories === null) return true;
       return group.categories.includes((ex.category || '').toLowerCase());
     });
-    if (filtered.length > 0) {
-      setSelectedExercise((prev) =>
-        filtered.some((ex) => ex.name === prev) ? prev : filtered[0].name
-      );
-    } else {
-      setSelectedExercise('');
-    }
-  }, [activeGroup, exercises]);
+    if (filtered.length > 0) setSelectedExercise(filtered[0].name);
+    else setSelectedExercise('');
+  }, [activeGroup]); // exercises intentionally read via ref, not as a dependency
 
   const fetchChartData = useCallback(async () => {
     if (!user || !selectedExercise) return;
