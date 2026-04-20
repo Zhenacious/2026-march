@@ -117,18 +117,18 @@ const SetRow = React.memo(function SetRow({
       {showExerciseName && (
         <button onClick={(e) => { e.stopPropagation(); onGoToExercise(set.exercise_name); }}
           title="View exercise history"
-          className="text-zinc-600 hover:text-blue-400 active:text-blue-400 transition-colors p-1.5 rounded"
+          className="text-zinc-400 hover:text-blue-400 active:text-blue-400 transition-colors p-1.5 rounded"
         >
           <TrendingUp className="w-4 h-4" />
         </button>
       )}
       <button onClick={(e) => { e.stopPropagation(); onEditStart(); }}
-        className="text-zinc-600 hover:text-violet-400 active:text-violet-400 transition-colors p-1.5 rounded"
+        className="text-zinc-400 hover:text-violet-400 active:text-violet-400 transition-colors p-1.5 rounded"
       >
         <Pencil className="w-4 h-4" />
       </button>
       <button onClick={(e) => { e.stopPropagation(); onDelete(set.id); }}
-        className="text-zinc-600 hover:text-red-400 active:text-red-400 transition-colors p-1.5 rounded"
+        className="text-zinc-400 hover:text-red-400 active:text-red-400 transition-colors p-1.5 rounded"
       >
         <Trash2 className="w-4 h-4" />
       </button>
