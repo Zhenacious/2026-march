@@ -50,11 +50,9 @@ const SetRow = React.memo(function SetRow({
   canMoveUp, canMoveDown,
   onMoveUp, onMoveDown, onDelete, onEditStart, onGoToExercise,
   onChangeSetType,
-  isTapped, onTap,
 }) {
   const category = categoryMap[set.exercise_name.toLowerCase()];
   const color = getCategoryColor(category);
-  const actionClass = isTapped ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
 
   const badgeClass = setTypeBadgeClass(set.set_type);
 
@@ -66,9 +64,7 @@ const SetRow = React.memo(function SetRow({
   }
 
   return (
-    <div
-      onClick={() => onTap(set.id)}
-      className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group cursor-pointer select-none"
+    <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group"
     >
       {/* Reorder buttons */}
       <div className="flex flex-col gap-0.5 flex-shrink-0">
@@ -121,20 +117,20 @@ const SetRow = React.memo(function SetRow({
       {showExerciseName && (
         <button onClick={(e) => { e.stopPropagation(); onGoToExercise(set.exercise_name); }}
           title="View exercise history"
-          className={`text-zinc-700 hover:text-blue-400 transition-colors p-1 rounded ${actionClass}`}
+          className="text-zinc-600 hover:text-blue-400 active:text-blue-400 transition-colors p-1.5 rounded"
         >
-          <TrendingUp className="w-3.5 h-3.5" />
+          <TrendingUp className="w-4 h-4" />
         </button>
       )}
       <button onClick={(e) => { e.stopPropagation(); onEditStart(); }}
-        className={`text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded ${actionClass}`}
+        className="text-zinc-600 hover:text-violet-400 active:text-violet-400 transition-colors p-1.5 rounded"
       >
-        <Pencil className="w-3.5 h-3.5" />
+        <Pencil className="w-4 h-4" />
       </button>
       <button onClick={(e) => { e.stopPropagation(); onDelete(set.id); }}
-        className={`text-zinc-700 hover:text-red-400 transition-colors p-1 rounded ${actionClass}`}
+        className="text-zinc-600 hover:text-red-400 active:text-red-400 transition-colors p-1.5 rounded"
       >
-        <Trash2 className="w-3.5 h-3.5" />
+        <Trash2 className="w-4 h-4" />
       </button>
     </div>
   );
@@ -187,9 +183,6 @@ export default function WorkoutLog() {
   // Edit state
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState({});
-
-  // Mobile tap-to-reveal actions
-  const [tappedSetId, setTappedSetId] = useState(null);
 
   // Date calendar popup
   const [showDateCal, setShowDateCal] = useState(false);
@@ -426,8 +419,6 @@ export default function WorkoutLog() {
         onEditStart={() => startEdit(set)}
         onGoToExercise={(name) => navigate(`/exercises/${encodeURIComponent(name)}`)}
         onChangeSetType={handleChangeSetType}
-        isTapped={tappedSetId === set.id}
-        onTap={(id) => setTappedSetId((prev) => (prev === id ? null : id))}
       />
     );
   }
