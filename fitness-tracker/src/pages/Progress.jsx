@@ -90,15 +90,20 @@ export default function Progress() {
     fetchExercises();
   }, [user]);
 
-  // When group changes, reset selected exercise to first in filtered list
+  // When group changes, reset selected exercise only if current selection isn't in the filtered list
   useEffect(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
     const filtered = exercises.filter((ex) => {
       if (group.categories === null) return true;
       return group.categories.includes((ex.category || '').toLowerCase());
     });
-    if (filtered.length > 0) setSelectedExercise(filtered[0].name);
-    else setSelectedExercise('');
+    if (filtered.length > 0) {
+      setSelectedExercise((prev) =>
+        filtered.some((ex) => ex.name === prev) ? prev : filtered[0].name
+      );
+    } else {
+      setSelectedExercise('');
+    }
   }, [activeGroup, exercises]);
 
   const fetchChartData = useCallback(async () => {
