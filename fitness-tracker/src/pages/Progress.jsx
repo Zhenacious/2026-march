@@ -14,6 +14,7 @@ import {
   Legend,
 } from 'recharts';
 import { TrendingUp, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import { MUSCLE_GROUPS } from '../lib/categories';
@@ -37,6 +38,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Progress() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [exercises, setExercises] = useState([]);      // [{ name, category }]
   const [selectedExercise, setSelectedExercise] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
@@ -148,6 +150,7 @@ export default function Progress() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, vals]) => ({
           date: format(parseISO(date), timeScale === 'month' ? 'MMM d' : 'MMM d yy'),
+          isoDate: date,
           'Est. 1RM (kg)': vals.maxE1RM,
           'Total Volume (kg)': Math.round(vals.totalVolume),
         }));
@@ -163,6 +166,11 @@ export default function Progress() {
   useEffect(() => {
     fetchChartData();
   }, [fetchChartData]);
+
+  function handleChartClick(data) {
+    const iso = data?.activePayload?.[0]?.payload?.isoDate;
+    if (iso) navigate(`/today?date=${iso}`);
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -273,7 +281,7 @@ export default function Progress() {
             </div>
             <p className="text-zinc-500 text-xs mb-5">Best set per session</p>
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                 <XAxis
                   dataKey="date"
@@ -304,7 +312,7 @@ export default function Progress() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
             <h2 className="text-zinc-100 font-semibold mb-5">Total Volume per Session</h2>
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                 <XAxis
                   dataKey="date"

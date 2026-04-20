@@ -91,22 +91,17 @@ const SetRow = React.memo(function SetRow({
           {showExerciseName && (
             <p className="text-zinc-200 text-sm font-medium truncate">{set.exercise_name}</p>
           )}
-          {/* Clickable set-type badge — tap to cycle Normal → Drop → Super */}
-          {badgeClass ? (
-            <button
-              onClick={handleTypeTap}
-              className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-opacity hover:opacity-80 ${badgeClass}`}
-            >
-              {set.set_type === 'dropset' ? 'Drop' : 'Super'}
-            </button>
-          ) : (
-            <button
-              onClick={handleTypeTap}
-              className="text-xs px-1.5 py-0.5 rounded border font-medium opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity bg-zinc-800 text-zinc-500 border-zinc-700"
-            >
-              Normal
-            </button>
-          )}
+          {/* Clickable set-type badge — always visible, tap to cycle Normal → Drop → Super */}
+          <button
+            onClick={handleTypeTap}
+            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-all flex-shrink-0 ${
+              set.set_type === 'dropset'  ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' :
+              set.set_type === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
+              isTapped ? 'bg-zinc-700 text-zinc-400 border-zinc-600' : 'bg-transparent text-zinc-600 border-zinc-700'
+            }`}
+          >
+            {set.set_type === 'dropset' ? 'Drop' : set.set_type === 'superset' ? 'Super' : 'Normal'}
+          </button>
           {showExerciseName && color && (
             <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>{color.label}</span>
           )}

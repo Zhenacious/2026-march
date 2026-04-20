@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight } from 'lucide-react';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import {
@@ -410,17 +410,26 @@ export default function ExerciseHistory() {
                 <div key={date} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <div>
-                      <button
-                        onClick={() => navigate(`/today?date=${date}`)}
-                        className="text-zinc-100 font-semibold text-sm hover:text-teal-400 transition-colors text-left"
-                      >
-                        {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => navigate(`/today?date=${date}`)}
+                          className="text-zinc-100 font-semibold text-sm hover:text-violet-400 transition-colors text-left"
+                        >
+                          {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
+                        </button>
+                        <button
+                          onClick={() => navigate(`/today?date=${date}`)}
+                          className="text-zinc-600 hover:text-violet-400 transition-colors p-0.5 rounded flex-shrink-0"
+                          title="Go to this workout"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <p className="text-zinc-500 text-xs mt-0.5">{sets.length} set{sets.length !== 1 ? 's' : ''}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-zinc-500 text-xs">Est. 1RM</p>
-                      <p className="text-teal-400 font-semibold text-sm">{bestE1RM} kg</p>
+                      <p className="text-violet-400 font-semibold text-sm">{bestE1RM} kg</p>
                     </div>
                   </div>
                   <div className="divide-y divide-zinc-800">
