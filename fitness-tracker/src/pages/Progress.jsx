@@ -172,9 +172,8 @@ export default function Progress() {
     fetchChartData();
   }, [fetchChartData]);
 
-  function handleChartClick(data) {
-    const iso = data?.activePayload?.[0]?.payload?.isoDate;
-    if (iso) navigate(`/today?date=${iso}`);
+  function handleChartClick() {
+    if (selectedExercise) navigate(`/exercises/${encodeURIComponent(selectedExercise)}`);
   }
 
   return (
@@ -225,6 +224,16 @@ export default function Progress() {
 
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs font-medium text-zinc-400">Exercise</label>
+          <div className="flex items-center gap-2">
+          {selectedExercise && (
+            <button
+              onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`)}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-600 text-zinc-300 transition-colors"
+            >
+              <TrendingUp className="w-3 h-3" />
+              View Exercise
+            </button>
+          )}
           {selectedExercise && (
             <button
               onClick={() => {
@@ -243,6 +252,7 @@ export default function Progress() {
               {defaultExercise === selectedExercise ? 'Default' : 'Set as default'}
             </button>
           )}
+          </div>
         </div>
         {exercises.length === 0 ? (
           <p className="text-zinc-500 text-sm">No exercises found. Log some workouts first.</p>

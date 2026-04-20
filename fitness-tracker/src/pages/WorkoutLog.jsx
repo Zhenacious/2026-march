@@ -370,6 +370,7 @@ export default function WorkoutLog() {
       duration_min: set.duration_seconds > 0 ? String(Math.floor(set.duration_seconds / 60)) : '',
       duration_sec: set.duration_seconds > 0 ? String(set.duration_seconds % 60) : '',
       set_type: set.set_type || 'normal',
+      notes: set.notes || '',
     });
   }
 
@@ -384,6 +385,7 @@ export default function WorkoutLog() {
       distance_unit: editValues.distance_unit || '',
       duration_seconds,
       set_type: editValues.set_type,
+      notes: editValues.notes || '',
     };
     try {
       const { error: err } = await supabase.from('workout_sets').update(updates).eq('id', setId);
@@ -785,8 +787,9 @@ export default function WorkoutLog() {
         const editingSet = sets.find((s) => s.id === editingSetId);
         return (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <div className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl max-h-[92vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 flex-shrink-0">
                 <div>
                   <h2 className="text-zinc-100 font-semibold text-sm">Edit Set</h2>
                   {editingSet && <p className="text-zinc-500 text-xs mt-0.5">{editingSet.exercise_name}</p>}
@@ -796,88 +799,69 @@ export default function WorkoutLog() {
                 </button>
               </div>
 
-              <div className="px-5 py-4 space-y-4">
-                {/* Weight stepper in edit modal */}
+              {/* Scrollable body */}
+              <div className="px-5 py-4 space-y-5 overflow-y-auto flex-1">
+
+                {/* Weight */}
                 <div>
-                  <label className="text-zinc-400 text-xs font-medium block mb-1">Weight (kg)</label>
-                  <div className="flex items-center gap-1.5">
+                  <label className="text-zinc-400 text-xs font-medium block mb-2">Weight (kg)</label>
+                  <div className="flex items-center gap-2">
                     <button type="button"
                       onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, -2.5) }))}
-                      className="w-11 h-11 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-zinc-200 text-xl font-bold flex items-center justify-center flex-shrink-0"
+                      className="w-12 h-12 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-700 rounded-xl text-zinc-200 text-2xl font-bold flex items-center justify-center flex-shrink-0 select-none"
                     >−</button>
                     <input type="number" value={editValues.weight_kg} min="0" step="0.5"
                       onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2.5 text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-3 text-base text-center font-bold focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
                     <button type="button"
                       onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, 2.5) }))}
-                      className="w-11 h-11 bg-violet-600 hover:bg-violet-500 rounded-xl text-white text-xl font-bold flex items-center justify-center flex-shrink-0"
+                      className="w-12 h-12 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 rounded-xl text-white text-2xl font-bold flex items-center justify-center flex-shrink-0 select-none"
                     >+</button>
                   </div>
-                  <div className="flex gap-1 mt-1.5">
+                  <div className="flex gap-1.5 mt-2">
                     {WEIGHT_INCREMENTS.map((inc) => (
                       <button key={inc} type="button"
                         onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, inc) }))}
-                        className={`flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${
+                        className={`flex-1 text-xs py-2 rounded-lg border font-semibold transition-colors ${
                           inc > 0
                             ? 'bg-violet-600/10 hover:bg-violet-600/20 border-violet-500/30 text-violet-400'
-                            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-500'
+                            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-500 hover:text-zinc-300'
                         }`}
                       >{inc > 0 ? `+${inc}` : inc}</button>
                     ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-zinc-400 text-xs font-medium block mb-1">Reps</label>
+                {/* Reps */}
+                <div>
+                  <label className="text-zinc-400 text-xs font-medium block mb-2">Reps</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button"
+                      onClick={() => setEditValues((p) => ({ ...p, reps: String(Math.max(0, (parseInt(p.reps) || 0) - 1)) }))}
+                      className="w-12 h-12 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-700 rounded-xl text-zinc-200 text-2xl font-bold flex items-center justify-center flex-shrink-0 select-none"
+                    >−</button>
                     <input type="number" value={editValues.reps} min="0"
                       onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
-                      className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-3 text-base text-center font-bold focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
-                  </div>
-                  <div>
-                    <label className="text-zinc-400 text-xs font-medium block mb-1">Distance</label>
-                    <div className="flex gap-1">
-                      <input type="number" value={editValues.distance} min="0" step="0.1"
-                        onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <select value={editValues.distance_unit}
-                        onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
-                        className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      >
-                        <option value="km">km</option>
-                        <option value="mi">mi</option>
-                        <option value="m">m</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-zinc-400 text-xs font-medium block mb-1">Duration</label>
-                    <div className="flex gap-1 items-center">
-                      <input type="number" value={editValues.duration_min} min="0" placeholder="min"
-                        onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <span className="text-zinc-500 text-xs">:</span>
-                      <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
-                        onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                    </div>
+                    <button type="button"
+                      onClick={() => setEditValues((p) => ({ ...p, reps: String((parseInt(p.reps) || 0) + 1) }))}
+                      className="w-12 h-12 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 rounded-xl text-white text-2xl font-bold flex items-center justify-center flex-shrink-0 select-none"
+                    >+</button>
                   </div>
                 </div>
 
+                {/* Set Type */}
                 <div>
                   <label className="text-zinc-400 text-xs font-medium block mb-2">Set Type</label>
                   <div className="flex gap-2">
                     {SET_TYPE_OPTIONS.map((opt) => (
                       <button key={opt.value} type="button"
                         onClick={() => setEditValues((p) => ({ ...p, set_type: opt.value }))}
-                        className={`flex-1 text-xs py-2.5 rounded-xl border font-medium transition-colors ${
+                        className={`flex-1 text-sm py-3 rounded-xl border font-semibold transition-colors ${
                           editValues.set_type === opt.value
-                            ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
+                            ? opt.value === 'dropset'  ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
                             : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
                             : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
                             : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
@@ -886,14 +870,62 @@ export default function WorkoutLog() {
                     ))}
                   </div>
                 </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="text-zinc-400 text-xs font-medium block mb-2">Notes</label>
+                  <textarea
+                    value={editValues.notes}
+                    onChange={(e) => setEditValues((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="e.g. felt strong, left shoulder tight…"
+                    rows={2}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  />
+                </div>
+
+                {/* Distance + Duration — less prominent, collapsed */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-zinc-400 text-xs font-medium block mb-1">Distance</label>
+                    <div className="flex gap-1">
+                      <input type="number" value={editValues.distance} min="0" step="0.1"
+                        onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <select value={editValues.distance_unit}
+                        onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
+                        className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      >
+                        <option value="km">km</option>
+                        <option value="mi">mi</option>
+                        <option value="m">m</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 text-xs font-medium block mb-1">Duration</label>
+                    <div className="flex gap-1 items-center">
+                      <input type="number" value={editValues.duration_min} min="0" placeholder="min"
+                        onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <span className="text-zinc-600 text-xs">:</span>
+                      <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
+                        onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="px-5 py-4 border-t border-zinc-800 flex gap-2">
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-zinc-800 flex gap-2 flex-shrink-0">
                 <button onClick={cancelEdit}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium py-2.5 rounded-xl transition-colors"
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium py-3 rounded-xl transition-colors"
                 >Cancel</button>
                 <button onClick={() => saveEdit(editingSetId)}
-                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-3 rounded-xl transition-colors"
                 >Save</button>
               </div>
             </div>
