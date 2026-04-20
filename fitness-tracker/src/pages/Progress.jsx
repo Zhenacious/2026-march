@@ -286,6 +286,7 @@ export default function Progress() {
                   axisLine={{ stroke: '#3f3f46' }}
                   tickLine={false}
                   unit=" kg"
+                  domain={['auto', 'auto']}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Line
@@ -316,6 +317,7 @@ export default function Progress() {
                   axisLine={{ stroke: '#3f3f46' }}
                   tickLine={false}
                   unit=" kg"
+                  domain={['auto', 'auto']}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar

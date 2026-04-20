@@ -18,7 +18,6 @@ export default function Exercises() {
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [adding, setAdding] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -59,7 +58,6 @@ export default function Exercises() {
       if (err) throw err;
       setNewName('');
       setNewCategory('');
-      setShowForm(false);
       await fetchExercises();
     } catch (err) {
       setError(err.message);
@@ -117,8 +115,6 @@ export default function Exercises() {
     }
   }
 
-  // Filter by search + active muscle group tab — wrapped in useMemo so it only
-  // recalculates when exercises, search term, or selected tab actually change.
   const { filtered, grouped, sortedCategories } = useMemo(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
     const filtered = exercises.filter((ex) => {
@@ -151,20 +147,11 @@ export default function Exercises() {
   );
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Exercise Library</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">{exercises.length} exercises total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Exercise
-          </button>
+          <h1 className="text-xl font-bold text-zinc-100">Exercise Library</h1>
+          <p className="text-zinc-400 text-xs mt-0.5">{exercises.length} exercises</p>
         </div>
       </div>
 
@@ -173,56 +160,67 @@ export default function Exercises() {
           {error}
         </div>
       )}
-      {showForm && (
-        <form
-          onSubmit={handleAdd}
-          className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6 space-y-4"
-        >
-          <h2 className="text-zinc-100 font-semibold">New Exercise</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Exercise Name *</label>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Bench Press"
-                required
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Category</label>
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              >
-                <option value="">Select category…</option>
-                {CATEGORY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={adding}
-              className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              {adding ? 'Adding…' : 'Add Exercise'}
-            </button>
+
+      {/* Add exercise — always visible, compact inline form */}
+      <form onSubmit={handleAdd} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <h2 className="text-zinc-100 font-semibold text-sm mb-3">Add Exercise</h2>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Exercise name, e.g. Bench Press"
+            required
+            autoComplete="off"
+            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newName.trim()}
+            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex items-center gap-1.5 flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            {adding ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+
+        {/* Category chips — much easier to pick than a dropdown */}
+        <div>
+          <p className="text-xs text-zinc-500 mb-1.5">Category (optional)</p>
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => { setShowForm(false); setNewName(''); setNewCategory(''); }}
-              className="text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+              onClick={() => setNewCategory('')}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                newCategory === ''
+                  ? 'bg-zinc-600 text-zinc-100 border-zinc-500'
+                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
+              }`}
             >
-              Cancel
+              None
             </button>
+            {CATEGORY_OPTIONS.map((c) => {
+              const color = CATEGORY_COLORS[c.toLowerCase()];
+              const isActive = newCategory === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewCategory(c)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex items-center gap-1.5 ${
+                    isActive
+                      ? `${color?.badge || 'bg-zinc-700 text-zinc-100 border-zinc-600'}`
+                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
+                  }`}
+                >
+                  {color && <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />}
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </button>
+              );
+            })}
           </div>
-        </form>
-      )}
+        </div>
+      </form>
 
       {/* Search */}
       <div className="relative mb-3">
@@ -232,19 +230,19 @@ export default function Exercises() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search exercises…"
-          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
         />
       </div>
 
       {/* Muscle group tabs */}
-      <div className="flex gap-1.5 flex-wrap mb-5">
+      <div className="flex gap-1.5 flex-wrap mb-4">
         {MUSCLE_GROUPS.map((g) => (
           <button
             key={g.label}
             onClick={() => setActiveGroup(g.label)}
-            className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+            className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
               activeGroup === g.label
-                ? 'bg-teal-600 text-white border-teal-600'
+                ? 'bg-violet-600 text-white border-violet-600'
                 : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >
@@ -268,12 +266,12 @@ export default function Exercises() {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {sortedCategories.map((cat) => {
             const color = CATEGORY_COLORS[cat.toLowerCase()];
             return (
               <div key={cat}>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-1.5">
                   {color && <span className={`w-2 h-2 rounded-full ${color.dot}`} />}
                   <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     {cat || 'Uncategorized'}
@@ -282,54 +280,72 @@ export default function Exercises() {
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden divide-y divide-zinc-800">
                   {grouped[cat].map((ex) => (
-                    <div key={ex.id} className="px-4 py-3 hover:bg-zinc-800/50 transition-colors">
+                    <div key={ex.id} className="px-4 py-2.5 hover:bg-zinc-800/50 transition-colors">
                       {editingId === ex.id ? (
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="space-y-2">
                           <input
                             autoFocus
                             type="text"
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(ex.id); if (e.key === 'Escape') cancelEdit(); }}
-                            className="flex-1 min-w-0 bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                           />
-                          <select
-                            value={editCategory}
-                            onChange={(e) => setEditCategory(e.target.value)}
-                            className="bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          >
-                            <option value="">Uncategorized</option>
-                            {CATEGORY_OPTIONS.map((c) => (
-                              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleSaveEdit(ex.id)}
-                            disabled={saving}
-                            className="text-green-400 hover:text-green-300 p-1 rounded transition-colors"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="text-zinc-500 hover:text-zinc-200 p-1 rounded transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                          {/* Category chips in edit mode */}
+                          <div className="flex flex-wrap gap-1.5">
+                            <button type="button" onClick={() => setEditCategory('')}
+                              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                editCategory === ''
+                                  ? 'bg-zinc-600 text-zinc-100 border-zinc-500'
+                                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
+                              }`}
+                            >None</button>
+                            {CATEGORY_OPTIONS.map((c) => {
+                              const col = CATEGORY_COLORS[c.toLowerCase()];
+                              const isActive = editCategory === c;
+                              return (
+                                <button key={c} type="button" onClick={() => setEditCategory(c)}
+                                  className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors flex items-center gap-1 ${
+                                    isActive
+                                      ? `${col?.badge || 'bg-zinc-700 text-zinc-100 border-zinc-600'}`
+                                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
+                                  }`}
+                                >
+                                  {col && <span className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />}
+                                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveEdit(ex.id)}
+                              disabled={saving}
+                              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Save
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-zinc-400 hover:text-zinc-200 text-xs px-3 py-1.5 rounded-lg transition-colors border border-zinc-700 hover:border-zinc-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
                           <button
                             onClick={() => navigate(`/exercises/${encodeURIComponent(ex.name)}`)}
-                            className="text-zinc-200 text-sm flex-1 text-left hover:text-teal-300 transition-colors"
+                            className="text-zinc-200 text-sm flex-1 text-left hover:text-violet-300 transition-colors"
                           >
                             {ex.name}
                           </button>
                           <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
                           <button
                             onClick={() => startEdit(ex)}
-                            className="text-zinc-600 hover:text-teal-400 transition-colors p-1 rounded"
+                            className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>

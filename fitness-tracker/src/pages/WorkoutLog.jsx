@@ -25,29 +25,50 @@ function getCategoryColor(category) {
   return CATEGORY_COLORS[category.toLowerCase()] || null;
 }
 
+const SET_TYPES = ['normal', 'dropset', 'superset'];
+
 const SET_TYPE_OPTIONS = [
   { value: 'normal',   label: 'Normal' },
   { value: 'dropset',  label: 'Drop' },
   { value: 'superset', label: 'Super' },
 ];
 
-// React.memo means this component only re-renders when its own props change.
-// Without this, every keystroke in the exercise input would re-render every set row.
+function setTypeBadgeClass(type) {
+  if (type === 'dropset')  return 'bg-orange-500/20 text-orange-300 border-orange-500/40';
+  if (type === 'superset') return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+  return null; // normal — no badge shown
+}
+
+// Increment a weight string by delta, clamped to >= 0
+function adjustWeight(current, delta) {
+  const val = parseFloat(current) || 0;
+  return String(Math.max(0, Math.round((val + delta) * 10) / 10));
+}
+
 const SetRow = React.memo(function SetRow({
   set, categoryMap, showExerciseName = true,
   canMoveUp, canMoveDown,
   onMoveUp, onMoveDown, onDelete, onEditStart, onGoToExercise,
+  onChangeSetType,
   isTapped, onTap,
 }) {
   const category = categoryMap[set.exercise_name.toLowerCase()];
   const color = getCategoryColor(category);
-  // On desktop: show on hover. On mobile: show when this set is tapped.
   const actionClass = isTapped ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
+
+  const badgeClass = setTypeBadgeClass(set.set_type);
+
+  function handleTypeTap(e) {
+    e.stopPropagation();
+    const idx = SET_TYPES.indexOf(set.set_type || 'normal');
+    const next = SET_TYPES[(idx + 1) % SET_TYPES.length];
+    onChangeSetType(set.id, next);
+  }
 
   return (
     <div
       onClick={() => onTap(set.id)}
-      className="flex items-center gap-2 px-3 py-3 hover:bg-zinc-800/50 transition-colors group cursor-pointer select-none"
+      className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group cursor-pointer select-none"
     >
       {/* Reorder buttons */}
       <div className="flex flex-col gap-0.5 flex-shrink-0">
@@ -66,15 +87,25 @@ const SetRow = React.memo(function SetRow({
       <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-700'}`} />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {showExerciseName && (
             <p className="text-zinc-200 text-sm font-medium truncate">{set.exercise_name}</p>
           )}
-          {set.set_type === 'dropset' && (
-            <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 font-medium">Drop</span>
-          )}
-          {set.set_type === 'superset' && (
-            <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-medium">Super</span>
+          {/* Clickable set-type badge — tap to cycle Normal → Drop → Super */}
+          {badgeClass ? (
+            <button
+              onClick={handleTypeTap}
+              className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-opacity hover:opacity-80 ${badgeClass}`}
+            >
+              {set.set_type === 'dropset' ? 'Drop' : 'Super'}
+            </button>
+          ) : (
+            <button
+              onClick={handleTypeTap}
+              className="text-xs px-1.5 py-0.5 rounded border font-medium opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity bg-zinc-800 text-zinc-500 border-zinc-700"
+            >
+              Normal
+            </button>
           )}
           {showExerciseName && color && (
             <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>{color.label}</span>
@@ -82,7 +113,7 @@ const SetRow = React.memo(function SetRow({
         </div>
         <p className="text-zinc-500 text-xs mt-0.5">
           {(set.weight_kg || 0) === 0 && (set.reps || 0) > 0
-            ? <span className="text-teal-400 font-medium">BW</span>
+            ? <span className="text-violet-400 font-medium">BW</span>
             : set.weight_kg > 0 ? `${set.weight_kg} kg` : null}
           {set.weight_kg > 0 && set.reps > 0 && ' × '}
           {set.reps > 0 && `${set.reps} reps`}
@@ -92,7 +123,6 @@ const SetRow = React.memo(function SetRow({
         </p>
       </div>
 
-      {/* Action buttons: always visible on desktop hover, only visible on mobile when tapped */}
       {showExerciseName && (
         <button onClick={(e) => { e.stopPropagation(); onGoToExercise(set.exercise_name); }}
           title="View exercise history"
@@ -102,7 +132,7 @@ const SetRow = React.memo(function SetRow({
         </button>
       )}
       <button onClick={(e) => { e.stopPropagation(); onEditStart(); }}
-        className={`text-zinc-700 hover:text-teal-400 transition-colors p-1 rounded ${actionClass}`}
+        className={`text-zinc-700 hover:text-violet-400 transition-colors p-1 rounded ${actionClass}`}
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
@@ -125,6 +155,8 @@ const MUSCLE_GROUPS = [
   { label: 'Abs',       categories: ['abs'] },
   { label: 'Mobility',  categories: ['mobility'] },
 ];
+
+const WEIGHT_INCREMENTS = [-5, -2.5, 2.5, 5];
 
 export default function WorkoutLog() {
   const { user } = useAuth();
@@ -172,16 +204,12 @@ export default function WorkoutLog() {
   });
   const [calDots, setCalDots] = useState({});
 
-  // Keep a ref to categoryMap so the calendar effect can read the latest value
-  // without needing categoryMap in its dependency array (which would cause an
-  // unnecessary re-fetch every time exercises are reloaded).
   const categoryMapRef = React.useRef({});
 
   const categoryMap = useMemo(
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
     [exercises]
   );
-  // Keep ref in sync so the calendar effect always has the latest map
   categoryMapRef.current = categoryMap;
 
   const { recentExerciseNames, exerciseLastSet } = useMemo(() => {
@@ -219,7 +247,6 @@ export default function WorkoutLog() {
   useEffect(() => { if (user) fetchExercises(); }, [user]);
   useEffect(() => { fetchSets(); }, [fetchSets]);
 
-  // Fetch which muscle groups were trained on each day of the visible calendar month
   useEffect(() => {
     if (!user || !showDateCal) return;
     async function fetchCalDots() {
@@ -247,7 +274,7 @@ export default function WorkoutLog() {
       setCalDots(result);
     }
     fetchCalDots();
-  }, [user, showDateCal, calMonth]); // categoryMap intentionally omitted — read via ref so exercise reloads don't re-trigger
+  }, [user, showDateCal, calMonth]);
 
   function fillFromRecent(exerciseName) {
     const last = exerciseLastSet[exerciseName];
@@ -309,7 +336,6 @@ export default function WorkoutLog() {
     } catch (err) { setError(err.message); }
   }
 
-  // Reorder: swap set_order between two sets in the full sorted array
   async function handleReorder(setId, orderedList, direction) {
     const idx = orderedList.findIndex((s) => s.id === setId);
     const neighborIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -330,7 +356,15 @@ export default function WorkoutLog() {
     } catch (err) { setError(err.message); }
   }
 
-  // Edit handlers
+  // Cycle set type directly from the row badge (Normal → Drop → Super → Normal)
+  async function handleChangeSetType(setId, newType) {
+    try {
+      const { error: err } = await supabase.from('workout_sets').update({ set_type: newType }).eq('id', setId);
+      if (err) throw err;
+      setSets((prev) => prev.map((s) => s.id === setId ? { ...s, set_type: newType } : s));
+    } catch (err) { setError(err.message); }
+  }
+
   function startEdit(set) {
     setEditingSetId(set.id);
     setEditValues({
@@ -379,7 +413,6 @@ export default function WorkoutLog() {
     return names.map((name) => ({ name, sets: filteredSets.filter((s) => s.exercise_name === name) }));
   }, [filteredSets]);
 
-  // Render a single set row with edit/reorder wired up
   function renderSetRow(set, orderedList, showExerciseName = true) {
     const idx = orderedList.findIndex((s) => s.id === set.id);
     return (
@@ -395,6 +428,7 @@ export default function WorkoutLog() {
         onDelete={handleDeleteSet}
         onEditStart={() => startEdit(set)}
         onGoToExercise={(name) => navigate(`/exercises/${encodeURIComponent(name)}`)}
+        onChangeSetType={handleChangeSetType}
         isTapped={tappedSetId === set.id}
         onTap={(id) => setTappedSetId((prev) => (prev === id ? null : id))}
       />
@@ -402,12 +436,12 @@ export default function WorkoutLog() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-zinc-100 mb-1">Workout Log</h1>
-      <p className="text-zinc-400 text-sm mb-6">Log your sets for any day</p>
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+      <h1 className="text-xl font-bold text-zinc-100 mb-1">Workout Log</h1>
+      <p className="text-zinc-400 text-xs mb-4">Log your sets for any day</p>
 
-      {/* Date picker with mini calendar popup */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6 relative">
+      {/* Date picker */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 relative">
         <label className="block text-xs font-medium text-zinc-400 mb-1">Date</label>
         <button
           type="button"
@@ -424,39 +458,22 @@ export default function WorkoutLog() {
 
         {showDateCal && (
           <>
-            {/* Backdrop */}
             <div className="fixed inset-0 z-40" onClick={() => setShowDateCal(false)} />
-            {/* Calendar popup */}
             <div className="absolute left-0 top-full mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 w-72">
-              {/* Month nav */}
               <div className="flex items-center justify-between mb-3">
-                <button
-                  type="button"
-                  onClick={() => setCalMonth(subMonths(calMonth, 1))}
+                <button type="button" onClick={() => setCalMonth(subMonths(calMonth, 1))}
                   className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-zinc-100 text-sm font-semibold">
-                  {format(calMonth, 'MMMM yyyy')}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCalMonth(addMonths(calMonth, 1))}
+                ><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-zinc-100 text-sm font-semibold">{format(calMonth, 'MMMM yyyy')}</span>
+                <button type="button" onClick={() => setCalMonth(addMonths(calMonth, 1))}
                   className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                ><ChevronRight className="w-4 h-4" /></button>
               </div>
-
-              {/* Day headers */}
               <div className="grid grid-cols-7 mb-1">
                 {['S','M','T','W','T','F','S'].map((d, i) => (
                   <div key={i} className="text-center text-xs text-zinc-600 py-1">{d}</div>
                 ))}
               </div>
-
-              {/* Day cells */}
               <div className="grid grid-cols-7 gap-y-1">
                 {eachDayOfInterval({
                   start: startOfWeek(startOfMonth(calMonth), { weekStartsOn: 0 }),
@@ -468,15 +485,13 @@ export default function WorkoutLog() {
                   const today = isToday(day);
                   const dots = calDots[dateStr] || [];
                   return (
-                    <button
-                      key={dateStr}
-                      type="button"
+                    <button key={dateStr} type="button"
                       onClick={() => { setSelectedDate(dateStr); setShowDateCal(false); }}
                       className={`flex flex-col items-center justify-start pt-1 pb-1 rounded-lg transition-colors h-10 ${
                         !inMonth ? 'opacity-25 pointer-events-none' : ''
                       } ${
-                        selected ? 'bg-teal-600 text-white' :
-                        today ? 'ring-1 ring-teal-500 text-zinc-100 hover:bg-zinc-800' :
+                        selected ? 'bg-violet-600 text-white' :
+                        today ? 'ring-1 ring-violet-500 text-zinc-100 hover:bg-zinc-800' :
                         'text-zinc-300 hover:bg-zinc-800'
                       }`}
                     >
@@ -484,10 +499,7 @@ export default function WorkoutLog() {
                       {dots.length > 0 && (
                         <div className="flex gap-0.5 flex-wrap justify-center">
                           {dots.slice(0, 4).map((cat) => (
-                            <span
-                              key={cat}
-                              className={`w-1 h-1 rounded-full ${CATEGORY_COLORS[cat]?.dot || 'bg-zinc-500'}`}
-                            />
+                            <span key={cat} className={`w-1 h-1 rounded-full ${CATEGORY_COLORS[cat]?.dot || 'bg-zinc-500'}`} />
                           ))}
                         </div>
                       )}
@@ -495,8 +507,6 @@ export default function WorkoutLog() {
                   );
                 })}
               </div>
-
-              {/* Legend */}
               <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-3 gap-y-1">
                 {Object.entries(CATEGORY_COLORS).map(([cat, c]) => (
                   <div key={cat} className="flex items-center gap-1">
@@ -513,13 +523,14 @@ export default function WorkoutLog() {
       {error && <div className="bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
       {success && <div className="bg-green-950 border border-green-800 text-green-300 px-4 py-3 rounded-lg mb-4 text-sm">{success}</div>}
 
-      <form onSubmit={handleAddSet} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
-        <h2 className="text-zinc-100 font-semibold mb-3">Add Set</h2>
+      {/* Add Set form */}
+      <form onSubmit={handleAddSet} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <h2 className="text-zinc-100 font-semibold mb-3 text-sm">Add Set</h2>
 
         {/* Recently used tabs */}
         {recentExerciseNames.length > 0 && (
-          <div className="mb-4">
-            <p className="text-xs text-zinc-500 mb-2">Recently used today</p>
+          <div className="mb-3">
+            <p className="text-xs text-zinc-500 mb-1.5">Recently used today</p>
             <div className="flex gap-1.5 flex-wrap">
               {recentExerciseNames.map((name) => {
                 const last = exerciseLastSet[name];
@@ -528,7 +539,7 @@ export default function WorkoutLog() {
                 return (
                   <button key={name} type="button" onClick={() => fillFromRecent(name)}
                     className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-                      isActive ? 'bg-teal-600 text-white border-teal-600'
+                      isActive ? 'bg-violet-600 text-white border-violet-600'
                       : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-zinc-600 hover:text-zinc-100'
                     }`}
                   >
@@ -547,7 +558,7 @@ export default function WorkoutLog() {
         )}
 
         {/* Exercise input */}
-        <div className="relative mb-4">
+        <div className="relative mb-3">
           <label className="block text-xs font-medium text-zinc-400 mb-1">Exercise *</label>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -555,7 +566,7 @@ export default function WorkoutLog() {
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 onFocus={() => exerciseInput && setShowSuggestions(true)}
                 placeholder="Search or enter exercise name" required
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
               />
               {showSuggestions && exerciseSuggestions.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden">
@@ -564,7 +575,7 @@ export default function WorkoutLog() {
                     return (
                       <button key={ex.name} type="button"
                         onMouseDown={() => { setExerciseInput(ex.name); setShowSuggestions(false); }}
-                        className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 flex items-center gap-2"
+                        className="w-full text-left px-3 py-2.5 text-sm text-zinc-200 hover:bg-zinc-700 flex items-center gap-2"
                       >
                         {color && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />}
                         <span className="flex-1">{ex.name}</span>
@@ -587,27 +598,71 @@ export default function WorkoutLog() {
           <ExercisePicker exercises={exercises} onSelect={(name) => setExerciseInput(name)} onClose={() => setShowPicker(false)} />
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {/* Weight with stepper */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Weight (kg)</label>
-            <input type="number" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="0" min="0" step="0.5"
-              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
+            {/* Big −/+ buttons */}
+            <div className="flex items-center gap-1.5">
+              <button type="button"
+                onClick={() => setWeightKg(adjustWeight(weightKg, -2.5))}
+                className="w-11 h-11 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-700 text-zinc-200 rounded-xl flex items-center justify-center text-xl font-bold transition-colors flex-shrink-0 select-none"
+              >−</button>
+              <input type="number" value={weightKg} onChange={(e) => setWeightKg(e.target.value)}
+                placeholder="0" min="0" step="0.5"
+                className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl px-2 py-2.5 text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+              <button type="button"
+                onClick={() => setWeightKg(adjustWeight(weightKg, 2.5))}
+                className="w-11 h-11 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white rounded-xl flex items-center justify-center text-xl font-bold transition-colors flex-shrink-0 select-none"
+              >+</button>
+            </div>
+            {/* Quick increment chips */}
+            <div className="flex gap-1 mt-1.5">
+              {WEIGHT_INCREMENTS.map((inc) => (
+                <button key={inc} type="button"
+                  onClick={() => setWeightKg(adjustWeight(weightKg, inc))}
+                  className={`flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${
+                    inc > 0
+                      ? 'bg-violet-600/10 hover:bg-violet-600/20 border-violet-500/30 text-violet-400'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {inc > 0 ? `+${inc}` : inc}
+                </button>
+              ))}
+            </div>
           </div>
+
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Reps</label>
-            <input type="number" value={reps} onChange={(e) => setReps(e.target.value)} placeholder="0" min="0"
-              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
+            <div className="flex items-center gap-1.5">
+              <button type="button"
+                onClick={() => setReps(prev => String(Math.max(0, (parseInt(prev) || 0) - 1)))}
+                className="w-11 h-11 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-700 text-zinc-200 rounded-xl flex items-center justify-center text-xl font-bold transition-colors flex-shrink-0 select-none"
+              >−</button>
+              <input type="number" value={reps} onChange={(e) => setReps(e.target.value)}
+                placeholder="0" min="0"
+                className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl px-2 py-2.5 text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              />
+              <button type="button"
+                onClick={() => setReps(prev => String((parseInt(prev) || 0) + 1))}
+                className="w-11 h-11 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white rounded-xl flex items-center justify-center text-xl font-bold transition-colors flex-shrink-0 select-none"
+              >+</button>
+            </div>
           </div>
+        </div>
+
+        {/* Distance & Duration — collapsed into a row, less prominent */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">Distance</label>
             <div className="flex gap-1">
               <input type="number" value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="0" min="0" step="0.1"
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
               <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value)}
-                className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
               >
                 <option value="km">km</option><option value="mi">mi</option><option value="m">m</option>
               </select>
@@ -617,25 +672,26 @@ export default function WorkoutLog() {
             <label className="block text-xs font-medium text-zinc-400 mb-1">Duration</label>
             <div className="flex gap-1 items-center">
               <input type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="min" min="0"
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
               <span className="text-zinc-500 text-xs">:</span>
               <input type="number" value={durationSec} onChange={(e) => setDurationSec(e.target.value)} placeholder="sec" min="0" max="59"
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-5">
-          <span className="text-xs font-medium text-zinc-400 mr-1">Set type:</span>
+        {/* Set type */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-medium text-zinc-400 mr-1">Type:</span>
           {SET_TYPE_OPTIONS.map((opt) => (
             <button key={opt.value} type="button" onClick={() => setSetType(opt.value)}
               className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                 setType === opt.value
                   ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
                   : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
-                  : 'bg-teal-500/20 text-teal-300 border-teal-500/60'
+                  : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
                   : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
               }`}
             >
@@ -645,7 +701,7 @@ export default function WorkoutLog() {
         </div>
 
         <button type="submit" disabled={saving}
-          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors w-full justify-center"
         >
           <Plus className="w-4 h-4" />
           {saving ? 'Saving…' : 'Add Set'}
@@ -654,10 +710,10 @@ export default function WorkoutLog() {
 
       {/* Sets list */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-zinc-100 font-semibold">
-              Sets for {selectedDate ? format(new Date(selectedDate + 'T00:00:00'), 'MMMM d, yyyy') : ''}
+        <div className="px-4 py-3 border-b border-zinc-800">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-zinc-100 font-semibold text-sm">
+              {selectedDate ? format(new Date(selectedDate + 'T00:00:00'), 'MMMM d, yyyy') : ''}
             </h2>
             <div className="flex items-center gap-2">
               <span className="text-zinc-500 text-xs">{sets.length} sets</span>
@@ -678,9 +734,9 @@ export default function WorkoutLog() {
           <div className="flex gap-1.5 flex-wrap">
             {MUSCLE_GROUPS.map((g) => (
               <button key={g.label} onClick={() => setActiveGroup(g.label)}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
                   activeGroup === g.label
-                    ? 'bg-teal-600 text-white border-teal-600'
+                    ? 'bg-violet-600 text-white border-violet-600'
                     : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
                 }`}
               >
@@ -707,16 +763,16 @@ export default function WorkoutLog() {
               const totalVol = exSets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
               return (
                 <div key={name}>
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800/60">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800/60">
                     {color && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />}
                     <button
                       onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`)}
-                      className="text-zinc-100 text-sm font-semibold flex-1 text-left hover:text-teal-400 transition-colors"
+                      className="text-zinc-100 text-sm font-semibold flex-1 text-left hover:text-violet-400 transition-colors"
                     >
                       {name}
                     </button>
                     <span className="text-zinc-500 text-xs">{exSets.length} set{exSets.length !== 1 ? 's' : ''}</span>
-                    {totalVol > 0 && <span className="text-zinc-500 text-xs">{totalVol.toLocaleString()} kg vol</span>}
+                    {totalVol > 0 && <span className="text-zinc-500 text-xs">{totalVol.toLocaleString()} kg</span>}
                     {color && <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge}`}>{color.label}</span>}
                   </div>
                   <div className="divide-y divide-zinc-800/60">
@@ -733,34 +789,56 @@ export default function WorkoutLog() {
       {editingSetId && (() => {
         const editingSet = sets.find((s) => s.id === editingSetId);
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl">
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <div>
                   <h2 className="text-zinc-100 font-semibold text-sm">Edit Set</h2>
-                  {editingSet && (
-                    <p className="text-zinc-500 text-xs mt-0.5">{editingSet.exercise_name}</p>
-                  )}
+                  {editingSet && <p className="text-zinc-500 text-xs mt-0.5">{editingSet.exercise_name}</p>}
                 </div>
-                <button onClick={cancelEdit} className="text-zinc-500 hover:text-zinc-200 transition-colors">
+                <button onClick={cancelEdit} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="px-5 py-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-zinc-400 text-xs font-medium block mb-1">Weight (kg)</label>
+                {/* Weight stepper in edit modal */}
+                <div>
+                  <label className="text-zinc-400 text-xs font-medium block mb-1">Weight (kg)</label>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button"
+                      onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, -2.5) }))}
+                      className="w-11 h-11 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-zinc-200 text-xl font-bold flex items-center justify-center flex-shrink-0"
+                    >−</button>
                     <input type="number" value={editValues.weight_kg} min="0" step="0.5"
                       onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
-                      className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2.5 text-sm text-center font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
+                    <button type="button"
+                      onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, 2.5) }))}
+                      className="w-11 h-11 bg-violet-600 hover:bg-violet-500 rounded-xl text-white text-xl font-bold flex items-center justify-center flex-shrink-0"
+                    >+</button>
                   </div>
+                  <div className="flex gap-1 mt-1.5">
+                    {WEIGHT_INCREMENTS.map((inc) => (
+                      <button key={inc} type="button"
+                        onClick={() => setEditValues((p) => ({ ...p, weight_kg: adjustWeight(p.weight_kg, inc) }))}
+                        className={`flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${
+                          inc > 0
+                            ? 'bg-violet-600/10 hover:bg-violet-600/20 border-violet-500/30 text-violet-400'
+                            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-500'
+                        }`}
+                      >{inc > 0 ? `+${inc}` : inc}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-zinc-400 text-xs font-medium block mb-1">Reps</label>
                     <input type="number" value={editValues.reps} min="0"
                       onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
-                      className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                     />
                   </div>
                   <div>
@@ -768,11 +846,11 @@ export default function WorkoutLog() {
                     <div className="flex gap-1">
                       <input type="number" value={editValues.distance} min="0" step="0.1"
                         onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                       <select value={editValues.distance_unit}
                         onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
-                        className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg px-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
                       >
                         <option value="km">km</option>
                         <option value="mi">mi</option>
@@ -780,17 +858,17 @@ export default function WorkoutLog() {
                       </select>
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-zinc-400 text-xs font-medium block mb-1">Duration</label>
                     <div className="flex gap-1 items-center">
                       <input type="number" value={editValues.duration_min} min="0" placeholder="min"
                         onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                       <span className="text-zinc-500 text-xs">:</span>
                       <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
                         onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
-                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                     </div>
                   </div>
@@ -802,11 +880,11 @@ export default function WorkoutLog() {
                     {SET_TYPE_OPTIONS.map((opt) => (
                       <button key={opt.value} type="button"
                         onClick={() => setEditValues((p) => ({ ...p, set_type: opt.value }))}
-                        className={`flex-1 text-xs py-2 rounded-lg border font-medium transition-colors ${
+                        className={`flex-1 text-xs py-2.5 rounded-xl border font-medium transition-colors ${
                           editValues.set_type === opt.value
                             ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
                             : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
-                            : 'bg-teal-500/20 text-teal-300 border-teal-500/60'
+                            : 'bg-violet-500/20 text-violet-300 border-violet-500/60'
                             : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
                         }`}
                       >{opt.label}</button>
@@ -817,10 +895,10 @@ export default function WorkoutLog() {
 
               <div className="px-5 py-4 border-t border-zinc-800 flex gap-2">
                 <button onClick={cancelEdit}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium py-2 rounded-lg transition-colors"
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium py-2.5 rounded-xl transition-colors"
                 >Cancel</button>
                 <button onClick={() => saveEdit(editingSetId)}
-                  className="flex-1 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
                 >Save</button>
               </div>
             </div>
