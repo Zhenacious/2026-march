@@ -14,6 +14,18 @@ function getTodayStr() {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+function adjustWeight(current, delta) {
+  const n = parseFloat(current);
+  const base = Number.isFinite(n) ? n : 0;
+  return String(Math.max(0, Math.round((base + delta) * 100) / 100));
+}
+
+function adjustReps(current, delta) {
+  const n = parseInt(current, 10);
+  const base = Number.isFinite(n) ? n : 0;
+  return String(Math.max(0, base + delta));
+}
+
 // ─── Templates bottom sheet ───────────────────────────────────────────────────
 function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave, onClose }) {
   const [saveName, setSaveName] = useState('');
@@ -537,6 +549,19 @@ export default function Today() {
     } catch (err) { console.error(err); }
   }
 
+  async function handleCycleSetType(set) {
+    const types = ['normal', 'dropset', 'superset'];
+    const current = set.set_type || 'normal';
+    const next = types[(types.indexOf(current) + 1) % types.length];
+    try {
+      const { error } = await supabase.from('workout_sets').update({ set_type: next }).eq('id', set.id);
+      if (error) throw error;
+      setSets((prev) => prev.map((s) => (s.id === set.id ? { ...s, set_type: next } : s)));
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   function handleStartEdit(set) {
     setEditingSetId(set.id);
     setEditValues({
@@ -706,7 +731,7 @@ export default function Today() {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
-                      <span className="truncate max-w-[10rem] md:max-w-none">{name}</span>
+                      <span className="md:max-w-none">{name}</span>
                     </button>
                   );
                 })}
@@ -725,22 +750,20 @@ export default function Today() {
                 </div>
                 <div className="text-center">
                   <p className="text-zinc-300 font-semibold text-base mb-1">
-                    {isToday ? 'Ready to train?' : 'No workout on this day.'}
+                    {isToday ? 'Ready to train?' : 'No workout logged.'}
                   </p>
                   {isToday && (
                     <p className="text-zinc-600 text-sm">{motivational}</p>
                   )}
                 </div>
-                {isToday && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSheet(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 active:to-cyan-600 text-white font-semibold px-8 py-4 rounded-2xl text-sm transition-all shadow-lg shadow-teal-900/40 min-h-[52px]"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Start Workout
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowSheet(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 active:to-cyan-600 text-white font-semibold px-8 py-4 rounded-2xl text-sm transition-all shadow-lg shadow-teal-900/40 min-h-[52px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isToday ? 'Start Workout' : 'Add Exercise'}
+                </button>
               </div>
             )}
 
@@ -768,7 +791,7 @@ export default function Today() {
                 {color
                   ? <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />
                   : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-zinc-700" />}
-                <span className="text-zinc-100 font-semibold text-sm flex-1 truncate">{name}</span>
+                <span className="text-zinc-100 font-semibold text-base flex-1 leading-snug">{name}</span>
                 {/* Set count */}
                 {exSets.length > 0 && (
                   <span className="text-zinc-600 text-xs flex-shrink-0">
@@ -817,19 +840,47 @@ export default function Today() {
                 {exSets.map((set, i) => (
                   <div key={set.id}>
                     {editingSetId === set.id ? (
-                      <div className="px-4 py-3 flex items-center gap-2 bg-zinc-800/30">
+                      <div className="px-4 py-3 flex items-center gap-2 bg-zinc-800/30 flex-wrap">
                         <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, -2.5) }))}
+                          className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                        >
+                          -
+                        </button>
                         <input autoFocus type="number" inputMode="decimal" value={editValues.weightKg}
                           onChange={(e) => setEditValues((v) => ({ ...v, weightKg: e.target.value }))}
                           placeholder="kg"
-                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, 2.5) }))}
+                          className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                        >
+                          +
+                        </button>
                         <span className="text-zinc-600 text-xs">×</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, -1) }))}
+                          className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                        >
+                          -
+                        </button>
                         <input type="number" inputMode="numeric" value={editValues.reps}
                           onChange={(e) => setEditValues((v) => ({ ...v, reps: e.target.value }))}
                           placeholder="reps"
-                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, 1) }))}
+                          className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                        >
+                          +
+                        </button>
                         <div className="flex-1" />
                         <button onClick={handleSaveEdit} disabled={saving}
                           className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors">
@@ -856,21 +907,29 @@ export default function Today() {
                             {!set.weight_kg && !set.reps && set.distance > 0 ? `${set.distance} ${set.distance_unit || 'km'}` : ''}
                             {set.duration_seconds > 0 ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}` : ''}
                           </span>
-                          {set.set_type === 'dropset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-orange-500/20 text-orange-300 border-orange-500/40 flex-shrink-0">Drop</span>}
-                          {set.set_type === 'superset' && <span className="text-xs px-1.5 py-0.5 rounded border bg-cyan-500/20 text-cyan-300 border-cyan-500/40 flex-shrink-0">Super</span>}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleCycleSetType(set); }}
+                            className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                              set.set_type === 'dropset'
+                                ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                                : set.set_type === 'superset'
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                  : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                            }`}
+                            title="Tap to change set type"
+                          >
+                            {set.set_type === 'dropset' ? 'Drop' : set.set_type === 'superset' ? 'Super' : 'Normal'}
+                          </button>
                           {prSetIds.has(set.id) && <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/40 flex-shrink-0 font-semibold">PR!</span>}
-                          {tappedSetId === set.id && (
-                            <>
-                              <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
-                                className="text-zinc-500 hover:text-teal-400 p-1.5 rounded transition-colors flex-shrink-0">
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
-                                className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
+                          <button onClick={(e) => { e.stopPropagation(); handleStartEdit(set); }}
+                            className="text-zinc-500 hover:text-teal-400 p-1.5 rounded transition-colors flex-shrink-0">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteSet(set.id); }}
+                            className="text-zinc-500 hover:text-red-400 p-1.5 rounded transition-colors flex-shrink-0">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                         {/* Saved note preview (shown when not tapped) */}
                         {setNotes[set.id] && tappedSetId !== set.id && (
@@ -897,18 +956,46 @@ export default function Today() {
               {/* Add set form */}
               {isAdding && (
                 <div className="px-4 py-3 border-t border-zinc-800/60 bg-zinc-800/20">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, -2.5) }))}
+                      className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                    >
+                      -
+                    </button>
                     <input autoFocus type="number" inputMode="decimal" value={addForm.weightKg}
                       onChange={(e) => setAddForm((f) => ({ ...f, weightKg: e.target.value }))}
                       placeholder="Weight (kg)"
-                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-24 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, 2.5) }))}
+                      className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                    >
+                      +
+                    </button>
                     <span className="text-zinc-600 text-xs flex-shrink-0">×</span>
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, -1) }))}
+                      className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                    >
+                      -
+                    </button>
                     <input type="number" inputMode="numeric" value={addForm.reps}
                       onChange={(e) => setAddForm((f) => ({ ...f, reps: e.target.value }))}
                       placeholder="Reps"
-                      className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className="w-20 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, 1) }))}
+                      className="w-11 h-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600"
+                    >
+                      +
+                    </button>
                     <button onClick={handleSaveSet} disabled={saving}
                       className="bg-teal-600 hover:bg-teal-500 active:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex-shrink-0">
                       {saving ? '…' : 'Add'}
