@@ -841,54 +841,54 @@ export default function Today() {
                   <div key={set.id}>
                     {editingSetId === set.id ? (
                       <div className="px-4 py-3 bg-zinc-800/30 space-y-2.5">
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-3">
                           {/* Weight stepper */}
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <button type="button"
-                              onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, -2.5) }))}
-                              className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                            >−</button>
-                            <div className="flex-1 min-w-0 flex flex-col items-center">
-                              <span className="text-[10px] text-zinc-500 mb-0.5">kg</span>
+                          <div>
+                            <p className="text-[10px] text-zinc-500 text-center mb-1">Weight (kg)</p>
+                            <div className="flex items-center gap-1.5">
+                              <button type="button"
+                                onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, -2.5) }))}
+                                className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                              >−</button>
                               <input autoFocus type="number" inputMode="decimal" value={editValues.weightKg}
                                 onChange={(e) => setEditValues((v) => ({ ...v, weightKg: e.target.value }))}
                                 placeholder="0"
-                                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
+                                className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                               />
+                              <button type="button"
+                                onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, 2.5) }))}
+                                className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                              >+</button>
                             </div>
-                            <button type="button"
-                              onClick={() => setEditValues((v) => ({ ...v, weightKg: adjustWeight(v.weightKg, 2.5) }))}
-                              className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                            >+</button>
                           </div>
-                          <span className="text-zinc-600 text-sm flex-shrink-0">×</span>
                           {/* Reps stepper */}
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <button type="button"
-                              onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, -1) }))}
-                              className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                            >−</button>
-                            <div className="flex-1 min-w-0 flex flex-col items-center">
-                              <span className="text-[10px] text-zinc-500 mb-0.5">reps</span>
+                          <div>
+                            <p className="text-[10px] text-zinc-500 text-center mb-1">Reps</p>
+                            <div className="flex items-center gap-1.5">
+                              <button type="button"
+                                onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, -1) }))}
+                                className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                              >−</button>
                               <input type="number" inputMode="numeric" value={editValues.reps}
                                 onChange={(e) => setEditValues((v) => ({ ...v, reps: e.target.value }))}
                                 placeholder="0"
-                                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
+                                className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-xl px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                               />
+                              <button type="button"
+                                onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, 1) }))}
+                                className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                              >+</button>
                             </div>
-                            <button type="button"
-                              onClick={() => setEditValues((v) => ({ ...v, reps: adjustReps(v.reps, 1) }))}
-                              className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                            >+</button>
                           </div>
-                          {/* Save / cancel */}
+                        </div>
+                        <div className="flex justify-end gap-2">
                           <button onClick={handleSaveEdit} disabled={saving}
-                            className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-green-400 hover:text-green-300 disabled:opacity-50 rounded-xl hover:bg-zinc-800 transition-colors">
-                            <Check className="w-5 h-5" />
+                            className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+                            <Check className="w-4 h-4" /> Save
                           </button>
                           <button onClick={() => setEditingSetId(null)}
-                            className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-zinc-600 hover:text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">
-                            <X className="w-5 h-5" />
+                            className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 text-sm px-4 py-2 rounded-xl hover:bg-zinc-800 transition-colors">
+                            <X className="w-4 h-4" /> Cancel
                           </button>
                         </div>
                       </div>
@@ -957,46 +957,44 @@ export default function Today() {
               {/* Add set form */}
               {isAdding && (
                 <div className="px-4 py-3 border-t border-zinc-800/60 bg-zinc-800/20 space-y-2.5">
-                  {/* Weight + Reps row — structured to always fit on phone */}
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     {/* Weight stepper */}
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <button type="button"
-                        onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, -2.5) }))}
-                        className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                      >−</button>
-                      <div className="flex-1 min-w-0 flex flex-col items-center">
-                        <span className="text-[10px] text-zinc-500 mb-0.5">kg</span>
+                    <div>
+                      <p className="text-[10px] text-zinc-500 text-center mb-1">Weight (kg)</p>
+                      <div className="flex items-center gap-1.5">
+                        <button type="button"
+                          onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, -2.5) }))}
+                          className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                        >−</button>
                         <input autoFocus type="number" inputMode="decimal" value={addForm.weightKg}
                           onChange={(e) => setAddForm((f) => ({ ...f, weightKg: e.target.value }))}
                           placeholder="0"
-                          className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
+                          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                         />
+                        <button type="button"
+                          onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, 2.5) }))}
+                          className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                        >+</button>
                       </div>
-                      <button type="button"
-                        onClick={() => setAddForm((f) => ({ ...f, weightKg: adjustWeight(f.weightKg, 2.5) }))}
-                        className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                      >+</button>
                     </div>
-                    <span className="text-zinc-600 text-sm flex-shrink-0">×</span>
                     {/* Reps stepper */}
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <button type="button"
-                        onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, -1) }))}
-                        className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                      >−</button>
-                      <div className="flex-1 min-w-0 flex flex-col items-center">
-                        <span className="text-[10px] text-zinc-500 mb-0.5">reps</span>
+                    <div>
+                      <p className="text-[10px] text-zinc-500 text-center mb-1">Reps</p>
+                      <div className="flex items-center gap-1.5">
+                        <button type="button"
+                          onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, -1) }))}
+                          className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                        >−</button>
                         <input type="number" inputMode="numeric" value={addForm.reps}
                           onChange={(e) => setAddForm((f) => ({ ...f, reps: e.target.value }))}
                           placeholder="0"
-                          className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
+                          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
                         />
+                        <button type="button"
+                          onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, 1) }))}
+                          className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
+                        >+</button>
                       </div>
-                      <button type="button"
-                        onClick={() => setAddForm((f) => ({ ...f, reps: adjustReps(f.reps, 1) }))}
-                        className="w-10 h-10 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold"
-                      >+</button>
                     </div>
                   </div>
                   {/* Set type pills + Add/Cancel */}
