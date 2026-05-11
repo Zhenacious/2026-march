@@ -8,6 +8,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // TEMPORARY: self-destroying SW to clear stuck caches on user devices.
+      // Remove this line once everyone has loaded the site at least once.
+      selfDestroying: true,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-icon.svg'],
       manifest: {
