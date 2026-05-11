@@ -15,8 +15,9 @@ import {
   ChevronUp,
   Trophy,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
-/** Secondary destinations — opened from the bottom “More” sheet (keeps the main chrome stable in mobile Safari / PWA). */
+/** Secondary destinations — opened from the bottom "More" sheet (keeps the main chrome stable in mobile Safari / PWA). */
 const moreNavItems = [
   { to: '/exercises',   label: 'Exercises',        icon: Library },
   { to: '/records',     label: 'Personal Records', icon: Trophy },
@@ -100,17 +101,26 @@ export default function Layout() {
         </div>
       </nav>
 
-      {/* ── “More” bottom sheet ── */}
+      {/* ── "More" bottom sheet ── */}
+      <AnimatePresence>
       {moreOpen && (
-        <div
+        <motion.div
           className="fixed inset-0 z-50 flex flex-col justify-end bg-black/55"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
           role="dialog"
           aria-modal="true"
           aria-label="More options"
           onClick={() => setMoreOpen(false)}
         >
-          <div
+          <motion.div
             className="bg-zinc-900 rounded-t-3xl border-t border-zinc-800 max-h-[min(78vh,520px)] flex flex-col shadow-2xl"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
@@ -162,9 +172,10 @@ export default function Layout() {
                 Sign out
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

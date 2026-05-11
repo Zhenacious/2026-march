@@ -5,6 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useDrag } from '@use-gesture/react';
+import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 
 // FILTER_TABS is just MUSCLE_GROUPS — alias so the sheet component still works
 const FILTER_TABS = MUSCLE_GROUPS;
@@ -31,7 +34,14 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
   const [saveName, setSaveName] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900" onClick={onClose}>
+    <motion.div
+      className="fixed inset-0 z-50 flex flex-col bg-zinc-900"
+      initial={{ y: '100%' }}
+      animate={{ y: 0 }}
+      exit={{ y: '100%' }}
+      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+      onClick={onClose}
+    >
       <div className="flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-12 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2">
@@ -95,7 +105,7 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -130,8 +140,12 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
   const canCreate = search.trim().length > 0 && !exactMatch;
 
   return (
-    <div
+    <motion.div
       className="fixed inset-0 z-50 flex flex-col bg-zinc-900"
+      initial={{ y: '100%' }}
+      animate={{ y: 0 }}
+      exit={{ y: '100%' }}
+      transition={{ type: 'spring', damping: 30, stiffness: 300 }}
       onClick={onClose}
     >
       <div
@@ -229,7 +243,7 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
           })}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -621,11 +635,37 @@ export default function Today() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64 text-zinc-400 text-sm">Loading…</div>;
+    return (
+      <SkeletonTheme baseColor="#27272a" highlightColor="#3f3f46">
+        <div className="max-w-lg mx-auto px-4 pt-5 pb-8">
+          <div className="flex items-center justify-between mb-6">
+            <Skeleton circle width={36} height={36} />
+            <div className="text-center flex-1 mx-4">
+              <Skeleton height={28} width={100} />
+              <Skeleton height={14} width={120} />
+            </div>
+            <Skeleton circle width={36} height={36} />
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="mb-3">
+              <Skeleton height={90} borderRadius={16} />
+            </div>
+          ))}
+        </div>
+      </SkeletonTheme>
+    );
   }
 
+  const bind = useDrag(
+    ({ swipe: [swipeX] }) => {
+      if (swipeX === 1) goToPrevDay();
+      if (swipeX === -1 && !isToday) goToNextDay();
+    },
+    { axis: 'x', swipe: { distance: 50, velocity: 0.3 } }
+  );
+
   return (
-    <div className="max-w-6xl mx-auto pb-8">
+    <div {...bind()} style={{ touchAction: 'pan-y' }} className="max-w-6xl mx-auto pb-8">
 
       {/* ── Date navigation header ── */}
       <div className="px-4 pt-5 pb-4 flex items-center gap-2 max-w-lg mx-auto">
@@ -1031,24 +1071,30 @@ export default function Today() {
       </div>
 
 
-      {showSheet && (
-        <AddExerciseSheet
-          exercises={exercises}
-          onSelect={handlePickExercise}
-          onClose={() => setShowSheet(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showSheet && (
+          <AddExerciseSheet
+            key="add-exercise-sheet"
+            exercises={exercises}
+            onSelect={handlePickExercise}
+            onClose={() => setShowSheet(false)}
+          />
+        )}
+      </AnimatePresence>
 
-      {showTemplates && (
-        <TemplatesSheet
-          templates={templates}
-          currentExercises={groupedExercises.map((g) => g.name)}
-          onLoad={handleLoadTemplate}
-          onDelete={handleDeleteTemplate}
-          onSave={handleSaveTemplate}
-          onClose={() => setShowTemplates(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showTemplates && (
+          <TemplatesSheet
+            key="templates-sheet"
+            templates={templates}
+            currentExercises={groupedExercises.map((g) => g.name)}
+            onLoad={handleLoadTemplate}
+            onDelete={handleDeleteTemplate}
+            onSave={handleSaveTemplate}
+            onClose={() => setShowTemplates(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
