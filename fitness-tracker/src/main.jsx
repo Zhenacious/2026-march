@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App.jsx';
 import './index.css';
+import 'react-loading-skeleton/dist/skeleton.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
