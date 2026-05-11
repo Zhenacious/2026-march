@@ -634,6 +634,15 @@ export default function Today() {
     finally { setSaving(false); }
   }
 
+  // ⚠️ All hooks must be called above this line — early returns cannot come before any hook.
+  const bind = useDrag(
+    ({ swipe: [swipeX] }) => {
+      if (swipeX === 1) goToPrevDay();
+      if (swipeX === -1 && !isToday) goToNextDay();
+    },
+    { axis: 'x', swipe: { distance: 50, velocity: 0.3 } }
+  );
+
   if (loading) {
     return (
       <SkeletonTheme baseColor="#27272a" highlightColor="#3f3f46">
@@ -655,14 +664,6 @@ export default function Today() {
       </SkeletonTheme>
     );
   }
-
-  const bind = useDrag(
-    ({ swipe: [swipeX] }) => {
-      if (swipeX === 1) goToPrevDay();
-      if (swipeX === -1 && !isToday) goToNextDay();
-    },
-    { axis: 'x', swipe: { distance: 50, velocity: 0.3 } }
-  );
 
   return (
     <div {...bind()} style={{ touchAction: 'pan-y' }} className="max-w-6xl mx-auto pb-8">
