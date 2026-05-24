@@ -129,6 +129,7 @@ export default function Import() {
         a.download = 'fittrack-export.csv';
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 100);
+        setExporting(false);
         return;
       }
 
@@ -200,7 +201,7 @@ export default function Import() {
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-zinc-100 mb-1">Import / Export</h1>
       <p className="text-zinc-400 text-sm mb-6">
-        Export your data from the FitNotes app and upload the CSV file here
+        Upload a FitNotes CSV to import your history, or download all your data as a CSV file.
       </p>
 
       {error && (
