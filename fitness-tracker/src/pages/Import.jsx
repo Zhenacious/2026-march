@@ -109,15 +109,33 @@ export default function Import() {
     }
   }
 
+  function secondsToTime(s) {
+    if (!s) return '0:00:00';
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  }
+
   async function handleExport() {
     setExporting(true);
     setExportError('');
     try {
-      const { data: workouts, error: wErr } = await supabase
-        .from('workouts')
-        .select('id, date')
-        .eq('user_id', user.id);
-      if (wErr) throw new Error('Failed to fetch workouts: ' + wErr.message);
+      const PAGE = 1000;
+      let workouts = [];
+      let offset = 0;
+      while (true) {
+        const { data: batch, error: wErr } = await supabase
+          .from('workouts')
+          .select('id, date')
+          .eq('user_id', user.id)
+          .order('date')
+          .range(offset, offset + PAGE - 1);
+        if (wErr) throw new Error('Failed to fetch workouts: ' + wErr.message);
+        workouts = workouts.concat(batch || []);
+        if ((batch || []).length < PAGE) break;
+        offset += PAGE;
+      }
 
       const workoutIds = (workouts || []).map((w) => w.id);
       if (workoutIds.length === 0) {
@@ -127,7 +145,9 @@ export default function Import() {
         const a = document.createElement('a');
         a.href = url;
         a.download = 'fittrack-export.csv';
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 100);
         setExporting(false);
         return;
@@ -176,7 +196,7 @@ export default function Import() {
           s.reps ?? 0,
           s.distance ?? 0,
           s.distance_unit || '',
-          s.duration_seconds ?? 0,
+          secondsToTime(s.duration_seconds),
         ].join(',')
       );
 
@@ -186,7 +206,9 @@ export default function Import() {
       const a = document.createElement('a');
       a.href = url;
       a.download = 'fittrack-export.csv';
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (err) {
       setExportError(err.message);
