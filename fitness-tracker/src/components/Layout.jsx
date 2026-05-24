@@ -25,7 +25,7 @@ const moreNavItems = [
   { to: '/progress',    label: 'Progress',         icon: TrendingUp },
   { to: '/body-weight', label: 'Body weight',      icon: Scale },
   { to: '/dashboard',   label: 'Stats',            icon: LayoutDashboard },
-  { to: '/import',      label: 'Import',           icon: Upload },
+  { to: '/import',      label: 'Import / Export',  icon: Upload },
 ];
 
 export default function Layout() {
