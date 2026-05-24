@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { parseFitNotesCSV } from '../lib/fitnotes';
-import { Upload, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
 
 export default function Import() {
   const { user } = useAuth();
@@ -198,7 +198,7 @@ export default function Import() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-zinc-100 mb-1">Import FitNotes CSV</h1>
+      <h1 className="text-2xl font-bold text-zinc-100 mb-1">Import / Export</h1>
       <p className="text-zinc-400 text-sm mb-6">
         Export your data from the FitNotes app and upload the CSV file here
       </p>
@@ -323,6 +323,29 @@ export default function Import() {
             : `Import ${parsedRows.length} rows`}
         </button>
       )}
+
+      <hr className="border-zinc-800 my-2" />
+
+      <h2 className="text-xl font-bold text-zinc-100 mb-1 mt-6">Export Your Data</h2>
+      <p className="text-zinc-400 text-sm mb-6">
+        Download all your workout data as a CSV file. Works with FitNotes and spreadsheet apps.
+      </p>
+
+      {exportError && (
+        <div className="flex items-start gap-3 bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>{exportError}</span>
+        </div>
+      )}
+
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+      >
+        <Download className="w-4 h-4" />
+        {exporting ? 'Exporting…' : 'Download CSV'}
+      </button>
     </div>
   );
 }
