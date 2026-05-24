@@ -13,6 +13,8 @@ export default function Import() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   async function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -104,6 +106,85 @@ export default function Import() {
     } finally {
       setImporting(false);
       setProgress({ done: 0, total: 0 });
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError('');
+    try {
+      const { data: workouts, error: wErr } = await supabase
+        .from('workouts')
+        .select('id, date')
+        .eq('user_id', user.id);
+      if (wErr) throw new Error('Failed to fetch workouts: ' + wErr.message);
+
+      const workoutIds = (workouts || []).map((w) => w.id);
+      if (workoutIds.length === 0) {
+        const csv = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time\n';
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fittrack-export.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      const { data: sets, error: sErr } = await supabase
+        .from('workout_sets')
+        .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order')
+        .in('workout_id', workoutIds);
+      if (sErr) throw new Error('Failed to fetch sets: ' + sErr.message);
+
+      const { data: exercises, error: eErr } = await supabase
+        .from('exercises')
+        .select('name, category')
+        .eq('user_id', user.id);
+      if (eErr) throw new Error('Failed to fetch exercises: ' + eErr.message);
+
+      const workoutDateMap = {};
+      (workouts || []).forEach((w) => { workoutDateMap[w.id] = w.date; });
+
+      const categoryMap = {};
+      (exercises || []).forEach((e) => { categoryMap[e.name] = e.category || ''; });
+
+      const sorted = [...(sets || [])].sort((a, b) => {
+        const dateA = workoutDateMap[a.workout_id] || '';
+        const dateB = workoutDateMap[b.workout_id] || '';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+        return (a.set_order || 0) - (b.set_order || 0);
+      });
+
+      const escape = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      const header = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time';
+      const rows = sorted.map((s) =>
+        [
+          workoutDateMap[s.workout_id] || '',
+          escape(s.exercise_name),
+          escape(categoryMap[s.exercise_name] ?? ''),
+          s.weight_kg ?? 0,
+          s.reps ?? 0,
+          s.distance ?? 0,
+          s.distance_unit || '',
+          s.duration_seconds ?? 0,
+        ].join(',')
+      );
+
+      const csv = [header, ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'fittrack-export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err.message);
+    } finally {
+      setExporting(false);
     }
   }
 
