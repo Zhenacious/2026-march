@@ -128,15 +128,21 @@ export default function Import() {
         a.href = url;
         a.download = 'fittrack-export.csv';
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
         return;
       }
 
-      const { data: sets, error: sErr } = await supabase
-        .from('workout_sets')
-        .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order')
-        .in('workout_id', workoutIds);
-      if (sErr) throw new Error('Failed to fetch sets: ' + sErr.message);
+      const BATCH = 200;
+      let allSets = [];
+      for (let i = 0; i < workoutIds.length; i += BATCH) {
+        const chunk = workoutIds.slice(i, i + BATCH);
+        const { data: batchSets, error: sErr } = await supabase
+          .from('workout_sets')
+          .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order')
+          .in('workout_id', chunk);
+        if (sErr) throw new Error('Failed to fetch sets: ' + sErr.message);
+        allSets = allSets.concat(batchSets || []);
+      }
 
       const { data: exercises, error: eErr } = await supabase
         .from('exercises')
@@ -150,7 +156,7 @@ export default function Import() {
       const categoryMap = {};
       (exercises || []).forEach((e) => { categoryMap[e.name] = e.category || ''; });
 
-      const sorted = [...(sets || [])].sort((a, b) => {
+      const sorted = [...allSets].sort((a, b) => {
         const dateA = workoutDateMap[a.workout_id] || '';
         const dateB = workoutDateMap[b.workout_id] || '';
         if (dateA !== dateB) return dateA.localeCompare(dateB);
@@ -180,7 +186,7 @@ export default function Import() {
       a.href = url;
       a.download = 'fittrack-export.csv';
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (err) {
       setExportError(err.message);
     } finally {
