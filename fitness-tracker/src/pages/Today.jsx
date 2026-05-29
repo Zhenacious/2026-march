@@ -420,11 +420,29 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
 }
 
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
-function AddExerciseSheet({ exercises, onSelect, onClose }) {
+function AddExerciseSheet({ exercises, recentNames = [], onSelect, onClose }) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
   const inputRef = useRef(null);
+
+  // Resolved recent exercise objects, narrowed to the current filter tab.
+  // Hidden when the user is searching (the search results are what they want).
+  const recentForView = useMemo(() => {
+    if (search.trim()) return [];
+    const tab = FILTER_TABS.find((t) => t.label === activeTab);
+    const seen = new Set();
+    return recentNames
+      .map((n) => exercises.find((e) => e.name.toLowerCase() === n.toLowerCase()))
+      .filter((ex) => {
+        if (!ex) return false;
+        if (seen.has(ex.id)) return false;
+        seen.add(ex.id);
+        if (!tab.categories) return true;
+        return tab.categories.includes((ex.category || '').toLowerCase());
+      })
+      .slice(0, 6);
+  }, [recentNames, exercises, search, activeTab]);
 
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 50);
@@ -501,6 +519,31 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
         </div>
 
         <div className="overflow-y-auto flex-1 px-2 pb-8">
+          {recentForView.length > 0 && (
+            <div className="mb-2">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold px-3 py-1.5">Recently logged</p>
+              {recentForView.map((ex) => {
+                const cat = (ex.category || '').toLowerCase();
+                const color = CATEGORY_COLORS[cat] || null;
+                return (
+                  <button
+                    key={`recent-${ex.id}`}
+                    onClick={() => onSelect(ex.name)}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-800 transition-colors text-left"
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
+                    <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
+                    {color && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>
+                        {color.label}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              <div className="h-px bg-zinc-800 mx-3 my-2" />
+            </div>
+          )}
           {canCreate && (
             <div className="rounded-xl ring-1 ring-teal-500/40 overflow-hidden">
               <button
@@ -617,6 +660,9 @@ export default function Today() {
   });
 
   const [pendingExercises, setPendingExercises] = useState([]);
+  // Most-recently-logged exercise names across the user's whole history, shown
+  // at the top of the Add Exercise picker for quick re-selection.
+  const [recentNames, setRecentNames] = useState([]);
 
   // One-time "Add to Home Screen" hint — only on iOS Safari when not already
   // installed, and only until the user dismisses it.
@@ -673,6 +719,36 @@ export default function Today() {
     // migration is applied (missing columns are simply absent on rows).
     supabase.from('exercises').select('*').eq('user_id', user.id).order('name')
       .then(({ data }) => setExercises(data || []));
+
+    // Compute "recently logged" by walking the user's last ~30 workouts
+    // newest-first and collecting distinct exercise names.
+    (async () => {
+      try {
+        const { data: workouts } = await supabase
+          .from('workouts')
+          .select('id, date')
+          .eq('user_id', user.id)
+          .order('date', { ascending: false })
+          .limit(30);
+        if (!workouts || workouts.length === 0) { setRecentNames([]); return; }
+        const ids = workouts.map((w) => w.id);
+        const { data: workoutSets } = await supabase
+          .from('workout_sets')
+          .select('workout_id, exercise_name, set_order')
+          .in('workout_id', ids)
+          .order('set_order');
+        if (!workoutSets) { setRecentNames([]); return; }
+        const seen = new Map();
+        for (const w of workouts) {
+          for (const s of workoutSets) {
+            if (s.workout_id !== w.id) continue;
+            if (!seen.has(s.exercise_name)) seen.set(s.exercise_name, true);
+          }
+          if (seen.size >= 8) break;
+        }
+        setRecentNames([...seen.keys()].slice(0, 8));
+      } catch (err) { console.error('recents fetch failed:', err.message); }
+    })();
   }, [user]);
 
   useEffect(() => {
@@ -821,6 +897,11 @@ export default function Today() {
 
       setFlashSetId(newSet.id);
       setTimeout(() => setFlashSetId(null), 1200);
+
+      // Bump this exercise to the top of "Recently logged".
+      setRecentNames((prev) =>
+        [name, ...prev.filter((n) => n.toLowerCase() !== name.toLowerCase())].slice(0, 8)
+      );
 
       // PR detection only makes sense for weight & reps exercises.
       if (type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
@@ -1106,6 +1187,7 @@ export default function Today() {
           <AddExerciseSheet
             key="add-exercise-sheet"
             exercises={exercises}
+            recentNames={recentNames}
             onSelect={handlePickExercise}
             onClose={() => setShowSheet(false)}
           />
