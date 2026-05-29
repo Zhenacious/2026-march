@@ -13,23 +13,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="debug-error" style="display:none;position:fixed;top:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:16px;font-family:monospace;font-size:12px;white-space:pre-wrap;z-index:99999;max-height:50vh;overflow:auto;"></div>
-    <script>
-      // TEMPORARY debug — show any uncaught error visibly so we can diagnose white screens
-      (function() {
-        var box = document.getElementById('debug-error');
-        function show(msg) {
-          box.style.display = 'block';
-          box.textContent = (box.textContent ? box.textContent + '\n\n' : '') + msg;
-        }
-        window.addEventListener('error', function(e) {
-          show('ERROR: ' + (e.message || e) + '\n  at ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?') + (e.error && e.error.stack ? '\n' + e.error.stack : ''));
-        });
-        window.addEventListener('unhandledrejection', function(e) {
-          show('UNHANDLED PROMISE: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason));
-        });
-      })();
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

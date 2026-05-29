@@ -260,12 +260,12 @@ export default function Exercises() {
             placeholder="Exercise name, e.g. Bench Press"
             required
             autoComplete="off"
-            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+            className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
           />
           <button
             type="submit"
             disabled={adding || !newName.trim()}
-            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex items-center gap-1.5 flex-shrink-0"
+            className="bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex items-center gap-1.5 flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
             {adding ? 'Adding…' : 'Add'}
@@ -318,7 +318,7 @@ export default function Exercises() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search exercises…"
-          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+          className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
         />
       </div>
 
@@ -330,7 +330,7 @@ export default function Exercises() {
             onClick={() => setActiveGroup(g.label)}
             className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
               activeGroup === g.label
-                ? 'bg-violet-600 text-white border-violet-600'
+                ? 'bg-teal-600 text-white border-teal-600'
                 : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
             }`}
           >
@@ -377,7 +377,7 @@ export default function Exercises() {
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(ex.id); if (e.key === 'Escape') cancelEdit(); }}
-                            className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                           />
                           {/* Category chips in edit mode */}
                           <div className="flex flex-wrap gap-1.5">
@@ -409,7 +409,7 @@ export default function Exercises() {
                             <button
                               onClick={() => handleSaveEdit(ex.id)}
                               disabled={saving}
-                              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                              className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                             >
                               <Check className="w-3.5 h-3.5" /> Save
                             </button>
@@ -426,14 +426,14 @@ export default function Exercises() {
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
                           <button
                             onClick={() => navigate(`/exercises/${encodeURIComponent(ex.name)}`)}
-                            className="text-zinc-200 text-sm flex-1 text-left hover:text-violet-300 transition-colors"
+                            className="text-zinc-200 text-sm flex-1 text-left hover:text-teal-300 transition-colors"
                           >
                             {ex.name}
                           </button>
                           <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
                           <button
                             onClick={() => startEdit(ex)}
-                            className="text-zinc-600 hover:text-violet-400 transition-colors p-1 rounded"
+                            className="text-zinc-600 hover:text-teal-400 transition-colors p-1 rounded"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>

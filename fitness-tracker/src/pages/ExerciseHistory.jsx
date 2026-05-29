@@ -413,13 +413,13 @@ export default function ExerciseHistory() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => navigate(`/today?date=${date}`)}
-                          className="text-zinc-100 font-semibold text-sm hover:text-violet-400 transition-colors text-left"
+                          className="text-zinc-100 font-semibold text-sm hover:text-teal-400 transition-colors text-left"
                         >
                           {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
                         </button>
                         <button
                           onClick={() => navigate(`/today?date=${date}`)}
-                          className="text-zinc-600 hover:text-violet-400 transition-colors p-0.5 rounded flex-shrink-0"
+                          className="text-zinc-600 hover:text-teal-400 transition-colors p-0.5 rounded flex-shrink-0"
                           title="Go to this workout"
                         >
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -429,7 +429,7 @@ export default function ExerciseHistory() {
                     </div>
                     <div className="text-right">
                       <p className="text-zinc-500 text-xs">Est. 1RM</p>
-                      <p className="text-violet-400 font-semibold text-sm">{bestE1RM} kg</p>
+                      <p className="text-teal-400 font-semibold text-sm">{bestE1RM} kg</p>
                     </div>
                   </div>
                   <div className="divide-y divide-zinc-800">
