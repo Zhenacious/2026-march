@@ -49,15 +49,19 @@ export default function Layout() {
   return (
     <div className="flex flex-col min-h-dvh h-dvh bg-zinc-950 overflow-hidden">
 
-      {/* ── Simple top bar (no slide-out drawer — avoids odd Safari window / chrome shifts) ── */}
-      <header className="flex items-center justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3.5 bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-30">
-        <NavLink to="/today" className="flex items-center gap-2.5" onClick={() => setMoreOpen(false)}>
-          <div className="bg-teal-600 p-1.5 rounded-lg">
-            <Waves className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-base"><span className="bg-gradient-to-r from-teal-400 to-cyan-300 bg-clip-text text-transparent">Dolphin</span><span className="text-zinc-100">FitTrack</span></span>
-        </NavLink>
-      </header>
+      {/* ── Simple top bar (no slide-out drawer — avoids odd Safari window / chrome shifts) ──
+           Hidden on the Today route: the date header there acts as the title, so the logo
+           bar is redundant and just eats vertical space on the main logging screen. ── */}
+      {!isTodayRoute && (
+        <header className="flex items-center justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3.5 bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-30">
+          <NavLink to="/today" className="flex items-center gap-2.5" onClick={() => setMoreOpen(false)}>
+            <div className="bg-teal-600 p-1.5 rounded-lg">
+              <Waves className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-semibold text-base"><span className="bg-gradient-to-r from-teal-400 to-cyan-300 bg-clip-text text-transparent">Dolphin</span><span className="text-zinc-100">FitTrack</span></span>
+          </NavLink>
+        </header>
+      )}
 
       {/* ── Page scroll area — padding clears the fixed bottom bar ── */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden bg-zinc-950 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]">

@@ -801,7 +801,7 @@ export default function Today() {
   if (loading) {
     return (
       <SkeletonTheme baseColor="#27272a" highlightColor="#3f3f46">
-        <div className="max-w-lg mx-auto px-4 pt-5 pb-8">
+        <div className="max-w-lg mx-auto px-4 pt-[max(1.25rem,env(safe-area-inset-top,0px))] pb-8">
           <div className="flex items-center justify-between mb-6">
             <Skeleton circle width={36} height={36} />
             <div className="text-center flex-1 mx-4">
@@ -825,8 +825,9 @@ export default function Today() {
   return (
     <div {...bind()} style={{ touchAction: 'pan-y' }} className="max-w-lg mx-auto pb-8">
 
-      {/* Date navigation header */}
-      <div className="px-4 pt-5 pb-3 flex items-center gap-2">
+      {/* Date navigation header — top padding clears the iOS status bar/notch now that
+          the app's logo bar is hidden on this route */}
+      <div className="px-4 pt-[max(1.25rem,env(safe-area-inset-top,0px))] pb-3 flex items-center gap-2">
         <button onClick={goToPrevDay}
           className="text-zinc-500 hover:text-zinc-200 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
           <ChevronLeft className="w-5 h-5" />
