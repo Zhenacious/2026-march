@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight, Sparkles } from 'lucide-react';
 import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS } from '../lib/categories';
 import { SEED_EXERCISES } from '../lib/seedExercises';
+import { TRACK_TYPES, DEFAULT_TRACK_TYPE, trackTypeShort, defaultTrackTypeForCategory } from '../lib/trackTypes';
 
 const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categories: [''] }];
 
@@ -18,10 +19,12 @@ export default function Exercises() {
   const [error, setError] = useState('');
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [editType, setEditType] = useState(DEFAULT_TRACK_TYPE);
   const [saving, setSaving] = useState(false);
   const [toppingUp, setToppingUp] = useState(false);
   const [topUpMsg, setTopUpMsg] = useState(null);
@@ -57,10 +60,12 @@ export default function Exercises() {
         user_id: user.id,
         name: newName.trim(),
         category: newCategory.trim(),
+        track_type: newType,
       });
       if (err) throw err;
       setNewName('');
       setNewCategory('');
+      setNewType(DEFAULT_TRACK_TYPE);
       await fetchExercises();
     } catch (err) {
       setError(err.message);
@@ -88,12 +93,14 @@ export default function Exercises() {
     setEditingId(ex.id);
     setEditName(ex.name);
     setEditCategory(ex.category || '');
+    setEditType(ex.track_type || DEFAULT_TRACK_TYPE);
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditName('');
     setEditCategory('');
+    setEditType(DEFAULT_TRACK_TYPE);
   }
 
   async function handleSaveEdit(id) {
@@ -103,12 +110,12 @@ export default function Exercises() {
     try {
       const { error: err } = await supabase
         .from('exercises')
-        .update({ name: editName.trim(), category: editCategory })
+        .update({ name: editName.trim(), category: editCategory, track_type: editType })
         .eq('id', id)
         .eq('user_id', user.id);
       if (err) throw err;
       setExercises((prev) =>
-        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: editCategory } : ex)
+        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: editCategory, track_type: editType } : ex)
       );
       cancelEdit();
     } catch (err) {
@@ -151,7 +158,12 @@ export default function Exercises() {
       // Keep only names we recognise from the starter list.
       const records = toAdd
         .filter((name) => name in categoryByName)
-        .map((name) => ({ user_id: user.id, name, category: categoryByName[name] }));
+        .map((name) => ({
+          user_id: user.id,
+          name,
+          category: categoryByName[name],
+          track_type: defaultTrackTypeForCategory(categoryByName[name]),
+        }));
 
       if (records.length === 0) {
         setTopUpMsg({ type: 'info', text: 'Your library already covers the starter list.' });
@@ -308,6 +320,27 @@ export default function Exercises() {
             })}
           </div>
         </div>
+
+        {/* Track type — what you log for this exercise */}
+        <div className="mt-3">
+          <p className="text-xs text-zinc-500 mb-1.5">Tracks</p>
+          <div className="flex flex-wrap gap-1.5">
+            {TRACK_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setNewType(t.value)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                  newType === t.value
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </form>
 
       {/* Search */}
@@ -405,6 +438,18 @@ export default function Exercises() {
                               );
                             })}
                           </div>
+                          {/* Track type chips in edit mode */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {TRACK_TYPES.map((t) => (
+                              <button key={t.value} type="button" onClick={() => setEditType(t.value)}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                  editType === t.value
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
+                                }`}
+                              >{t.label}</button>
+                            ))}
+                          </div>
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleSaveEdit(ex.id)}
@@ -430,6 +475,11 @@ export default function Exercises() {
                           >
                             {ex.name}
                           </button>
+                          {(ex.track_type || 'weight_reps') !== 'weight_reps' && (
+                            <span className="text-[10px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5 flex-shrink-0">
+                              {trackTypeShort(ex.track_type)}
+                            </span>
+                          )}
                           <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
                           <button
                             onClick={() => startEdit(ex)}

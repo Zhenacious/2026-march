@@ -13,11 +13,12 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { TrendingUp, Star } from 'lucide-react';
+import { TrendingUp, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import { MUSCLE_GROUPS } from '../lib/categories';
+import { DEFAULT_TRACK_TYPE, trackTypeLabel } from '../lib/trackTypes';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -73,21 +74,34 @@ export default function Progress() {
 
       const uniqueNames = [...new Set(sets.map((s) => s.exercise_name))].sort();
 
-      // Fetch categories for these exercises
+      // Fetch categories + track types for these exercises. select('*') keeps the
+      // page working before the track_type migration is applied.
       const { data: exData } = await supabase
         .from('exercises')
-        .select('name, category')
+        .select('*')
         .eq('user_id', user.id)
         .in('name', uniqueNames);
 
       const catMap = {};
-      (exData || []).forEach((ex) => { catMap[ex.name] = ex.category || ''; });
+      const typeMap = {};
+      (exData || []).forEach((ex) => {
+        catMap[ex.name] = ex.category || '';
+        typeMap[ex.name] = ex.track_type || DEFAULT_TRACK_TYPE;
+      });
 
-      const withCats = uniqueNames.map((name) => ({ name, category: catMap[name] || '' }));
+      const withCats = uniqueNames.map((name) => ({
+        name,
+        category: catMap[name] || '',
+        track_type: typeMap[name] || DEFAULT_TRACK_TYPE,
+      }));
       exercisesRef.current = withCats;
       setExercises(withCats);
-      const saved = localStorage.getItem('progress_default_exercise');
-      const initial = saved && withCats.some((e) => e.name === saved) ? saved : withCats[0]?.name || '';
+      // Preference: the exercise you last viewed > your starred default > first in list.
+      const lastSel = localStorage.getItem('progress_last_exercise');
+      const defaultEx = localStorage.getItem('progress_default_exercise');
+      const initial = (lastSel && withCats.some((e) => e.name === lastSel)) ? lastSel
+        : (defaultEx && withCats.some((e) => e.name === defaultEx)) ? defaultEx
+          : withCats[0]?.name || '';
       setSelectedExercise(initial);
     }
     fetchExercises();
@@ -171,6 +185,14 @@ export default function Progress() {
   useEffect(() => {
     fetchChartData();
   }, [fetchChartData]);
+
+  // Remember which exercise you last viewed so opening Progress again resumes
+  // on it rather than jumping back to the first in the list.
+  useEffect(() => {
+    if (selectedExercise) {
+      try { localStorage.setItem('progress_last_exercise', selectedExercise); } catch { /* ignore */ }
+    }
+  }, [selectedExercise]);
 
   function handleChartClick() {
     if (selectedExercise) navigate(`/exercises/${encodeURIComponent(selectedExercise)}`);
@@ -262,27 +284,78 @@ export default function Progress() {
             if (group.categories === null) return true;
             return group.categories.includes((ex.category || '').toLowerCase());
           });
-          return filtered.length === 0 ? (
-            <p className="text-zinc-500 text-sm">No {activeGroup} exercises logged yet.</p>
-          ) : (
-            <select
-              value={selectedExercise}
-              onChange={(e) => setSelectedExercise(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-48"
-            >
-              {filtered.map((ex) => (
-                <option key={ex.name} value={ex.name}>
-                  {ex.name}{defaultExercise === ex.name ? ' ★' : ''}
-                </option>
-              ))}
-            </select>
+          if (filtered.length === 0) {
+            return <p className="text-zinc-500 text-sm">No {activeGroup} exercises logged yet.</p>;
+          }
+          const idx = filtered.findIndex((e) => e.name === selectedExercise);
+          const prevName = idx > 0 ? filtered[idx - 1].name : null;
+          const nextName = idx >= 0 && idx < filtered.length - 1 ? filtered[idx + 1].name : null;
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => prevName && setSelectedExercise(prevName)}
+                disabled={!prevName}
+                title={prevName ? `Previous: ${prevName}` : 'No previous exercise'}
+                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <select
+                value={selectedExercise}
+                onChange={(e) => setSelectedExercise(e.target.value)}
+                className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 min-w-48"
+              >
+                {filtered.map((ex) => (
+                  <option key={ex.name} value={ex.name}>
+                    {ex.name}{defaultExercise === ex.name ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => nextName && setSelectedExercise(nextName)}
+                disabled={!nextName}
+                title={nextName ? `Next: ${nextName}` : 'No next exercise'}
+                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           );
         })()}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-48 text-zinc-400">Loading chart…</div>
-      ) : chartData.length === 0 ? (
+      {(() => {
+        const selectedType = (exercises.find((e) => e.name === selectedExercise) || {}).track_type || DEFAULT_TRACK_TYPE;
+        if (loading) {
+          return <div className="flex items-center justify-center h-48 text-zinc-400">Loading chart…</div>;
+        }
+        if (selectedExercise && selectedType !== 'weight_reps') {
+          return (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
+              <TrendingUp className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-300 font-semibold text-sm mb-1">
+                {trackTypeLabel(selectedType)} exercise
+              </p>
+              <p className="text-zinc-500 text-xs mb-4 max-w-sm mx-auto">
+                The kg-based 1RM and volume charts don't apply here. Type-aware charts for time and distance are coming in a follow-up — for now, view this exercise's history page for the full session list.
+              </p>
+              {selectedExercise && (
+                <button
+                  onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`)}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-600 text-zinc-300 transition-colors"
+                >
+                  <TrendingUp className="w-3 h-3" /> View history
+                </button>
+              )}
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {loading ? null : ((exercises.find((e) => e.name === selectedExercise) || {}).track_type || DEFAULT_TRACK_TYPE) !== 'weight_reps' ? null : chartData.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-2">
           <TrendingUp className="w-8 h-8 opacity-40" />
           <p className="text-sm">No data for this exercise yet</p>

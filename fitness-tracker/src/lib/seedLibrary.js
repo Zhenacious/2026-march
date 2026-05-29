@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { SEED_EXERCISES } from './seedExercises';
+import { defaultTrackTypeForCategory } from './trackTypes';
 
 // Tracks users we've already attempted to seed during this page load, so the
 // routine can't run twice if multiple auth events fire in quick succession.
@@ -27,6 +28,7 @@ export async function maybeSeedExercises(user) {
         user_id: user.id,
         name: ex.name,
         category: ex.category,
+        track_type: defaultTrackTypeForCategory(ex.category),
       }));
       const { error: insertErr } = await supabase
         .from('exercises')

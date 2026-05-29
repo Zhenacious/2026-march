@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
+import { TRACK_TYPES, DEFAULT_TRACK_TYPE, DISTANCE_UNITS, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues } from '../lib/trackTypes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -29,17 +30,86 @@ function adjustReps(current, delta) {
   return String(Math.max(0, base + delta));
 }
 
-// Renders the weight × reps (or bodyweight / distance / duration) summary for a set
+// Builds a readable summary of a set from whatever fields it holds (weight×reps,
+// bodyweight reps, distance, duration) — works for every track type.
 function setSummary(set) {
+  const segs = [];
+  if (set.weight_kg > 0 && set.reps > 0) segs.push(`${set.weight_kg} kg × ${set.reps} reps`);
+  else if (set.weight_kg > 0) segs.push(`${set.weight_kg} kg`);
+  else if (set.reps > 0) segs.push(`BW × ${set.reps} reps`);
+  if (set.distance > 0) segs.push(`${set.distance} ${set.distance_unit || 'km'}`);
+  if (set.duration_seconds > 0) segs.push(formatDuration(set.duration_seconds));
+  return segs.join(' · ') || '—';
+}
+
+// One labelled +/- stepper with a numeric input in the middle.
+function Stepper({ label, value, onChange, step = 1, min = 0, max }) {
+  const adjust = (delta) => {
+    const n = parseInt(value, 10);
+    let next = (Number.isFinite(n) ? n : 0) + delta;
+    if (next < min) next = min;
+    if (max != null && next > max) next = max;
+    onChange(String(next));
+  };
   return (
-    <>
-      {set.weight_kg > 0 ? `${set.weight_kg} kg` : set.reps > 0 ? <span className="text-teal-400 font-medium">BW</span> : null}
-      {set.weight_kg > 0 && set.reps > 0 ? ' × ' : ''}
-      {set.reps > 0 ? `${set.reps} reps` : ''}
-      {!set.weight_kg && !set.reps && set.distance > 0 ? `${set.distance} ${set.distance_unit || 'km'}` : ''}
-      {set.duration_seconds > 0 ? ` · ${Math.floor(set.duration_seconds / 60)}:${String(set.duration_seconds % 60).padStart(2, '0')}` : ''}
-    </>
+    <div>
+      <p className="text-[10px] text-zinc-500 text-center mb-1">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={() => adjust(-step)}
+          className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
+        <input type="number" inputMode="numeric" value={value}
+          onChange={(e) => onChange(e.target.value)} placeholder="0"
+          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
+        <button type="button" onClick={() => adjust(step)}
+          className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
+      </div>
+    </div>
   );
+}
+
+// H : M : S steppers for time-based exercises.
+function TimeSteppers({ values, onChange }) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <Stepper label="Hours" value={values.h} onChange={(v) => onChange({ ...values, h: v })} step={1} />
+      <Stepper label="Minutes" value={values.m} onChange={(v) => onChange({ ...values, m: v })} step={1} max={59} />
+      <Stepper label="Seconds" value={values.s} onChange={(v) => onChange({ ...values, s: v })} step={5} max={59} />
+    </div>
+  );
+}
+
+// Distance value + unit, for distance_time exercises.
+function DistanceField({ values, onChange }) {
+  return (
+    <div>
+      <p className="text-[10px] text-zinc-500 text-center mb-1">Distance</p>
+      <div className="flex items-center gap-1.5">
+        <input type="number" inputMode="decimal" value={values.distance}
+          onChange={(e) => onChange({ ...values, distance: e.target.value })} placeholder="0"
+          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
+        <select value={values.distanceUnit}
+          onChange={(e) => onChange({ ...values, distanceUnit: e.target.value })}
+          className="bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-xl px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+          {DISTANCE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// Renders the right input fields for a given track type. `values` is the shared
+// entry shape from trackTypes.emptyValues().
+function SetEntryFields({ trackType, values, onChange }) {
+  if (trackType === 'time') return <TimeSteppers values={values} onChange={onChange} />;
+  if (trackType === 'distance_time') {
+    return (
+      <div className="space-y-2.5">
+        <DistanceField values={values} onChange={onChange} />
+        <TimeSteppers values={values} onChange={onChange} />
+      </div>
+    );
+  }
+  return <StepperPair values={values} onChange={onChange} />;
 }
 
 // ─── Weight + Reps stepper pair (shared by the entry pad and the edit form) ────
@@ -93,27 +163,35 @@ function SetTypePills({ value, onChange }) {
 // Shows the exercise's sets and a docked entry pad. Covers the whole screen so
 // — once the app is added to the iOS Home Screen — it fills the device edge to edge.
 function ExerciseLogSheet({
-  name, color, categoryLabel, sets, stats, prSetIds, flashSetId,
+  name, trackType, color, categoryLabel, sets, stats, prSetIds, flashSetId,
   setNotes, onSaveNote, prefill, saving,
-  onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onViewHistory, onClose,
+  onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onViewHistory, onClose, onPrev, onNext,
 }) {
-  const [entry, setEntry] = useState(prefill || { weightKg: '', reps: '', setType: 'normal' });
+  const [entry, setEntry] = useState(prefill || emptyValues());
   const [editingSetId, setEditingSetId] = useState(null);
-  const [editValues, setEditValues] = useState({ weightKg: '', reps: '', setType: 'normal' });
+  const [editValues, setEditValues] = useState(() => emptyValues());
   const [tappedSetId, setTappedSetId] = useState(null);
+
+  const isWeight = trackType === 'weight_reps';
+
+  // Switching exercise (prev/next) reuses this sheet — reset the entry pad and
+  // any in-progress edit to the newly-focused exercise.
+  useEffect(() => {
+    setEntry(prefill || emptyValues());
+    setEditingSetId(null);
+    setTappedSetId(null);
+    // Only react to the exercise changing, not to prefill recomputes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
 
   const todayVol = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
   const lastVol = stats?.lastSessionVolume;
-  const delta = lastVol && todayVol > 0 ? Math.round(((todayVol - lastVol) / lastVol) * 100) : null;
+  const delta = isWeight && lastVol && todayVol > 0 ? Math.round(((todayVol - lastVol) / lastVol) * 100) : null;
 
   function startEdit(set) {
     setTappedSetId(null);
     setEditingSetId(set.id);
-    setEditValues({
-      weightKg: set.weight_kg > 0 ? String(set.weight_kg) : '',
-      reps: set.reps > 0 ? String(set.reps) : '',
-      setType: set.set_type || 'normal',
-    });
+    setEditValues(prefillFromSet(set, trackType));
   }
 
   async function saveEdit() {
@@ -133,8 +211,8 @@ function ExerciseLogSheet({
         {/* Header */}
         <div className="flex items-center gap-1 px-2 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3 border-b border-zinc-800/70 flex-shrink-0">
           <button onClick={onClose}
-            className="flex items-center gap-0.5 text-zinc-300 hover:text-zinc-100 text-sm font-medium px-2 py-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
-            <ChevronLeft className="w-5 h-5" /> Done
+            className="text-zinc-300 hover:text-zinc-100 text-sm font-medium px-3 py-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
+            Done
           </button>
           <div className="flex-1 min-w-0 text-center px-1">
             <div className="flex items-center justify-center gap-2">
@@ -150,8 +228,17 @@ function ExerciseLogSheet({
               )}
             </p>
           </div>
+          {/* Prev / next exercise + history */}
+          <button onClick={onPrev} disabled={!onPrev} title="Previous exercise"
+            className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button onClick={onNext} disabled={!onNext} title="Next exercise"
+            className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
+            <ChevronRight className="w-5 h-5" />
+          </button>
           <button onClick={onViewHistory} title="View exercise history"
-            className="text-zinc-500 hover:text-teal-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
+            className="text-zinc-500 hover:text-teal-400 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
             <TrendingUp className="w-5 h-5" />
           </button>
         </div>
@@ -169,7 +256,7 @@ function ExerciseLogSheet({
                 <div key={set.id}>
                   {editingSetId === set.id ? (
                     <div className="py-3 space-y-2.5">
-                      <StepperPair values={editValues} onChange={setEditValues} />
+                      <SetEntryFields trackType={trackType} values={editValues} onChange={setEditValues} />
                       <div className="flex justify-end gap-2">
                         <button onClick={saveEdit} disabled={saving}
                           className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
@@ -191,15 +278,17 @@ function ExerciseLogSheet({
                       >
                         <span className="text-zinc-600 text-xs w-5 text-center flex-shrink-0">{i + 1}</span>
                         <span className="text-zinc-200 text-sm flex-1">{setSummary(set)}</span>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onCycleSetType(set); }}
-                          title="Tap to change set type"
-                          className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
-                            set.set_type === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
-                              : set.set_type === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                                : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
-                          }`}>
-                          {set.set_type === 'dropset' ? 'Drop' : set.set_type === 'superset' ? 'Super' : 'Normal'}
-                        </button>
+                        {isWeight && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); onCycleSetType(set); }}
+                            title="Tap to change set type"
+                            className={`text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                              set.set_type === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                                : set.set_type === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                  : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                            }`}>
+                            {set.set_type === 'dropset' ? 'Drop' : set.set_type === 'superset' ? 'Super' : 'Normal'}
+                          </button>
+                        )}
                         {prSetIds.has(set.id) && <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-500/20 text-amber-300 border-amber-500/40 flex-shrink-0 font-semibold">PR!</span>}
                         <button onClick={(e) => { e.stopPropagation(); startEdit(set); }}
                           className="text-zinc-500 hover:text-teal-400 p-1.5 rounded transition-colors flex-shrink-0">
@@ -234,13 +323,15 @@ function ExerciseLogSheet({
 
         {/* Docked entry pad */}
         <div className="border-t border-zinc-800 bg-zinc-900/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] space-y-2.5 flex-shrink-0">
-          <StepperPair values={entry} onChange={setEntry} />
+          <SetEntryFields trackType={trackType} values={entry} onChange={setEntry} />
           <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <SetTypePills value={entry.setType} onChange={(v) => setEntry((e) => ({ ...e, setType: v }))} />
-            </div>
+            {isWeight && (
+              <div className="flex-1">
+                <SetTypePills value={entry.setType} onChange={(v) => setEntry((e) => ({ ...e, setType: v }))} />
+              </div>
+            )}
             <button onClick={() => onAddSet(entry)} disabled={saving}
-              className="bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors flex-shrink-0 flex items-center gap-1.5">
+              className={`bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${isWeight ? 'flex-shrink-0' : 'flex-1'}`}>
               <Plus className="w-4 h-4" /> {saving ? 'Adding…' : 'Add Set'}
             </button>
           </div>
@@ -332,6 +423,7 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
 function AddExerciseSheet({ exercises, onSelect, onClose }) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
+  const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -410,18 +502,31 @@ function AddExerciseSheet({ exercises, onSelect, onClose }) {
 
         <div className="overflow-y-auto flex-1 px-2 pb-8">
           {canCreate && (
-            <button
-              onClick={() => onSelect(search.trim())}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-800 transition-colors text-left ring-1 ring-teal-500/40"
-            >
-              <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
-                <Plus className="w-3.5 h-3.5 text-teal-400" />
+            <div className="rounded-xl ring-1 ring-teal-500/40 overflow-hidden">
+              <button
+                onClick={() => onSelect(search.trim(), newType)}
+                className="w-full flex items-center gap-3 px-3 py-3 hover:bg-zinc-800 transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
+                  <Plus className="w-3.5 h-3.5 text-teal-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-zinc-100 text-sm font-medium truncate">Create &ldquo;{search.trim()}&rdquo;</p>
+                  <p className="text-zinc-500 text-xs">Add as a new exercise</p>
+                </div>
+              </button>
+              <div className="px-3 pb-3 pt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wide text-zinc-500 mr-1">Tracks</span>
+                {TRACK_TYPES.map((t) => (
+                  <button key={t.value} type="button" onClick={(e) => { e.stopPropagation(); setNewType(t.value); }}
+                    className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                      newType === t.value
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                    }`}>{t.label}</button>
+                ))}
               </div>
-              <div>
-                <p className="text-zinc-100 text-sm font-medium">Create &ldquo;{search.trim()}&rdquo;</p>
-                <p className="text-zinc-500 text-xs">Add as a new exercise</p>
-              </div>
-            </button>
+            </div>
           )}
 
           {filtered.length === 0 && !canCreate && (
@@ -535,6 +640,11 @@ export default function Today() {
     () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex.category || ''])),
     [exercises]
   );
+  const exerciseByName = useMemo(
+    () => Object.fromEntries(exercises.map((ex) => [ex.name.toLowerCase(), ex])),
+    [exercises]
+  );
+  const trackTypeOf = (name) => exerciseByName[name?.toLowerCase()]?.track_type || DEFAULT_TRACK_TYPE;
 
   const groupedExercises = useMemo(() => {
     const order = [];
@@ -559,7 +669,9 @@ export default function Today() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('exercises').select('id, name, category').eq('user_id', user.id).order('name')
+    // select('*') so the live site keeps working even before the track_type
+    // migration is applied (missing columns are simply absent on rows).
+    supabase.from('exercises').select('*').eq('user_id', user.id).order('name')
       .then(({ data }) => setExercises(data || []));
   }, [user]);
 
@@ -657,17 +769,13 @@ export default function Today() {
     } catch { return null; }
   }
 
-  // Builds the entry pad's starting values: today's last set for this exercise,
-  // else the most recent historical set.
+  // Builds the entry pad's starting values from the most recent set for this
+  // exercise — today's last if present, otherwise the historical last — shaped
+  // for the exercise's track type (weight/reps, time, or distance+time).
   function getPrefillFor(name) {
     const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
     const histLast = exerciseStats[name]?.lastSet;
-    const prefill = todayLast || histLast;
-    return {
-      weightKg: prefill?.weight_kg > 0 ? String(prefill.weight_kg) : '',
-      reps: prefill?.reps > 0 ? String(prefill.reps) : '',
-      setType: prefill?.set_type || 'normal',
-    };
+    return prefillFromSet(todayLast || histLast, trackTypeOf(name));
   }
 
   // Opens the full-screen log sheet for an exercise, fetching its stats first
@@ -677,14 +785,17 @@ export default function Today() {
     setOpenExercise(name);
   }
 
-  async function handlePickExercise(name) {
+  async function handlePickExercise(name, typeForNew) {
     setShowSheet(false);
     const alreadyExists = exercises.some((ex) => ex.name.toLowerCase() === name.toLowerCase());
     if (!alreadyExists) {
       const { data: newEx } = await supabase
         .from('exercises')
-        .upsert({ user_id: user.id, name, category: '' }, { onConflict: 'user_id,name' })
-        .select('id, name, category').single();
+        .upsert(
+          { user_id: user.id, name, category: '', track_type: typeForNew || DEFAULT_TRACK_TYPE },
+          { onConflict: 'user_id,name' }
+        )
+        .select('*').single();
       if (newEx) setExercises((prev) => [...prev, newEx].sort((a, b) => a.name.localeCompare(b.name)));
     }
     await openLog(name);
@@ -696,13 +807,14 @@ export default function Today() {
     try {
       const workoutId = await ensureWorkout();
       const maxOrder = sets.length > 0 ? Math.max(...sets.map((s) => s.set_order)) : 0;
-      const weight = parseFloat(values.weightKg) || 0;
-      const reps = parseInt(values.reps, 10) || 0;
+      const type = trackTypeOf(name);
+      const payload = setPayloadFromValues(values, type);
       const { data: newSet, error } = await supabase.from('workout_sets').insert({
-        workout_id: workoutId, exercise_name: name,
-        weight_kg: weight, reps,
-        set_order: maxOrder + 1, set_type: values.setType,
-        distance: 0, distance_unit: 'km', duration_seconds: 0,
+        workout_id: workoutId,
+        exercise_name: name,
+        ...payload,
+        set_order: maxOrder + 1,
+        set_type: values.setType || 'normal',
       }).select().single();
       if (error) throw error;
       setSets((prev) => [...prev, newSet]);
@@ -710,8 +822,9 @@ export default function Today() {
       setFlashSetId(newSet.id);
       setTimeout(() => setFlashSetId(null), 1200);
 
-      if (weight > 0 && reps > 0) {
-        const e1rm = Math.round(weight * (1 + reps / 30) * 10) / 10;
+      // PR detection only makes sense for weight & reps exercises.
+      if (type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
+        const e1rm = Math.round(payload.weight_kg * (1 + payload.reps / 30) * 10) / 10;
         const prevBest = exerciseStats[name]?.bestE1RM || 0;
         if (e1rm > prevBest) {
           setPrSetIds((prev) => new Set([...prev, newSet.id]));
@@ -728,10 +841,11 @@ export default function Today() {
   async function updateSetFor(setId, values) {
     setSaving(true);
     try {
+      const type = trackTypeOf(openExercise);
+      const payload = setPayloadFromValues(values, type);
       const { data: updated, error } = await supabase.from('workout_sets').update({
-        weight_kg: parseFloat(values.weightKg) || 0,
-        reps: parseInt(values.reps, 10) || 0,
-        set_type: values.setType,
+        ...payload,
+        set_type: values.setType || 'normal',
       }).eq('id', setId).select().single();
       if (error) throw error;
       setSets((prev) => prev.map((s) => s.id === setId ? updated : s));
@@ -821,6 +935,18 @@ export default function Today() {
   }
 
   const openColor = openExercise ? CATEGORY_COLORS[(categoryMap[openExercise.toLowerCase()] || '').toLowerCase()] || null : null;
+  const openType = openExercise ? trackTypeOf(openExercise) : DEFAULT_TRACK_TYPE;
+
+  // Prev/next exercise navigation inside the log sheet — steps through the day's
+  // exercises in display order without closing the sheet.
+  const dayNames = groupedExercises.map((g) => g.name);
+  const openIndex = openExercise
+    ? dayNames.findIndex((n) => n.toLowerCase() === openExercise.toLowerCase())
+    : -1;
+  const onPrevExercise = openIndex > 0 ? () => openLog(dayNames[openIndex - 1]) : null;
+  const onNextExercise = openIndex >= 0 && openIndex < dayNames.length - 1
+    ? () => openLog(dayNames[openIndex + 1])
+    : null;
 
   return (
     <div {...bind()} style={{ touchAction: 'pan-y' }} className="max-w-lg mx-auto pb-8">
@@ -950,8 +1076,9 @@ export default function Today() {
       <AnimatePresence>
         {openExercise && (
           <ExerciseLogSheet
-            key={`log-${openExercise}`}
+            key="log-sheet"
             name={openExercise}
+            trackType={openType}
             color={openColor}
             categoryLabel={openColor?.label}
             sets={openSets}
@@ -968,6 +1095,8 @@ export default function Today() {
             onCycleSetType={handleCycleSetType}
             onViewHistory={() => navigate(`/exercises/${encodeURIComponent(openExercise)}`)}
             onClose={() => setOpenExercise(null)}
+            onPrev={onPrevExercise}
+            onNext={onNextExercise}
           />
         )}
       </AnimatePresence>

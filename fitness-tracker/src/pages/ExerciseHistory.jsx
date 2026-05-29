@@ -2,13 +2,14 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { CATEGORY_COLORS } from '../lib/categories';
+import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration } from '../lib/trackTypes';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -44,11 +45,15 @@ export default function ExerciseHistory() {
   const [editValues, setEditValues] = useState({});
   const [saving, setSaving] = useState(false);
 
-  // Exercise name/category edit state
+  // Exercise name/category/type edit state
   const [editingExercise, setEditingExercise] = useState(false);
   const [editExName, setEditExName] = useState('');
   const [editExCategory, setEditExCategory] = useState('');
+  const [editExType, setEditExType] = useState(DEFAULT_TRACK_TYPE);
   const [savingExercise, setSavingExercise] = useState(false);
+
+  // All exercise names — used to step prev/next through the library.
+  const [allNames, setAllNames] = useState([]);
 
   const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
 
@@ -71,14 +76,23 @@ export default function ExerciseHistory() {
       setLoading(true);
       setError('');
       try {
-        // Fetch exercise metadata
+        // Fetch exercise metadata (select * so the live site keeps working even
+        // before the track_type migration is applied).
         const { data: exData } = await supabase
           .from('exercises')
-          .select('name, category')
+          .select('*')
           .eq('user_id', user.id)
           .eq('name', exerciseName)
           .maybeSingle();
-        setExercise(exData || { name: exerciseName, category: '' });
+        setExercise(exData || { name: exerciseName, category: '', track_type: DEFAULT_TRACK_TYPE });
+
+        // Also fetch all exercise names so the header can offer prev/next nav.
+        const { data: allEx } = await supabase
+          .from('exercises')
+          .select('name')
+          .eq('user_id', user.id)
+          .order('name');
+        setAllNames((allEx || []).map((e) => e.name));
 
         // Fetch all workouts for this user
         const { data: workouts, error: wErr } = await supabase
@@ -135,7 +149,7 @@ export default function ExerciseHistory() {
       const newName = editExName.trim();
       const { error: err } = await supabase
         .from('exercises')
-        .update({ name: newName, category: editExCategory })
+        .update({ name: newName, category: editExCategory, track_type: editExType })
         .eq('user_id', user.id)
         .eq('name', exerciseName);
       if (err) throw err;
@@ -149,7 +163,7 @@ export default function ExerciseHistory() {
         navigate(`/exercises/${encodeURIComponent(newName)}`, { replace: true });
         return;
       }
-      setExercise((prev) => ({ ...prev, name: newName, category: editExCategory }));
+      setExercise((prev) => ({ ...prev, name: newName, category: editExCategory, track_type: editExType }));
       setEditingExercise(false);
     } catch (err) {
       setError(err.message);
@@ -249,48 +263,88 @@ export default function ExerciseHistory() {
   }, [sessions, bodyWeights]);
 
   const color = exercise ? CATEGORY_COLORS[(exercise.category || '').toLowerCase()] : null;
+  const trackType = exercise?.track_type || DEFAULT_TRACK_TYPE;
+  const isWeight = trackType === 'weight_reps';
+
+  // Prev/next exercise navigation across the user's whole library (alphabetical).
+  const currentIndex = allNames.indexOf(exerciseName);
+  const prevName = currentIndex > 0 ? allNames[currentIndex - 1] : null;
+  const nextName = currentIndex >= 0 && currentIndex < allNames.length - 1 ? allNames[currentIndex + 1] : null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
       {/* Header */}
-      <button
-        onClick={() => navigate('/exercises')}
-        className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm mb-5 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Exercise Library
-      </button>
+      <div className="flex items-center justify-between mb-5">
+        <button
+          onClick={() => navigate('/exercises')}
+          className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Exercise Library
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => prevName && navigate(`/exercises/${encodeURIComponent(prevName)}`)}
+            disabled={!prevName}
+            title={prevName ? `Previous: ${prevName}` : 'No previous exercise'}
+            className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => nextName && navigate(`/exercises/${encodeURIComponent(nextName)}`)}
+            disabled={!nextName}
+            title={nextName ? `Next: ${nextName}` : 'No next exercise'}
+            className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
 
       {editingExercise ? (
-        <div className="flex items-center gap-2 flex-wrap mb-6">
-          <input
-            autoFocus
-            type="text"
-            value={editExName}
-            onChange={(e) => setEditExName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') saveExerciseEdit(); if (e.key === 'Escape') setEditingExercise(false); }}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 flex-1 min-w-0"
-          />
-          <select
-            value={editExCategory}
-            onChange={(e) => setEditExCategory(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <option value="">Uncategorized</option>
-            {CATEGORY_OPTIONS.map((c) => (
-              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+        <div className="mb-6 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              autoFocus
+              type="text"
+              value={editExName}
+              onChange={(e) => setEditExName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveExerciseEdit(); if (e.key === 'Escape') setEditingExercise(false); }}
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 flex-1 min-w-0"
+            />
+            <select
+              value={editExCategory}
+              onChange={(e) => setEditExCategory(e.target.value)}
+              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              <option value="">Uncategorized</option>
+              {CATEGORY_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              ))}
+            </select>
+            <button onClick={saveExerciseEdit} disabled={savingExercise}
+              className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors"
+            >
+              <Check className="w-5 h-5" />
+            </button>
+            <button onClick={() => setEditingExercise(false)}
+              className="text-zinc-500 hover:text-zinc-200 p-1.5 rounded transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 mr-1">Tracks</span>
+            {TRACK_TYPES.map((t) => (
+              <button key={t.value} type="button" onClick={() => setEditExType(t.value)}
+                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                  editExType === t.value
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
+                }`}>{t.label}</button>
             ))}
-          </select>
-          <button onClick={saveExerciseEdit} disabled={savingExercise}
-            className="text-green-400 hover:text-green-300 disabled:opacity-50 p-1.5 rounded transition-colors"
-          >
-            <Check className="w-5 h-5" />
-          </button>
-          <button onClick={() => setEditingExercise(false)}
-            className="text-zinc-500 hover:text-zinc-200 p-1.5 rounded transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-3 mb-6 group">
@@ -302,7 +356,7 @@ export default function ExerciseHistory() {
             </span>
           )}
           <button
-            onClick={() => { setEditExName(exercise?.name || exerciseName); setEditExCategory(exercise?.category || ''); setEditingExercise(true); }}
+            onClick={() => { setEditExName(exercise?.name || exerciseName); setEditExCategory(exercise?.category || ''); setEditExType(exercise?.track_type || DEFAULT_TRACK_TYPE); setEditingExercise(true); }}
             className="text-zinc-700 hover:text-teal-400 transition-colors p-1 rounded opacity-0 group-hover:opacity-100"
           >
             <Pencil className="w-4 h-4" />
@@ -325,8 +379,8 @@ export default function ExerciseHistory() {
         </div>
       ) : (
         <>
-          {/* Personal Records */}
-          {prs && (
+          {/* Personal Records — only meaningful for weight & reps exercises */}
+          {isWeight && prs && (
             <div className="grid grid-cols-2 gap-3 mb-6">
               {/* Best e1RM */}
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
@@ -374,8 +428,8 @@ export default function ExerciseHistory() {
             </div>
           )}
 
-          {/* e1RM chart */}
-          {chartData.length > 1 && (
+          {/* e1RM chart — kg-based, only for weight & reps exercises */}
+          {isWeight && chartData.length > 1 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
               <h2 className="text-zinc-100 font-semibold mb-1">Estimated 1RM Progress</h2>
               <p className="text-zinc-500 text-xs mb-4">{sessions.length} sessions</p>
@@ -427,10 +481,12 @@ export default function ExerciseHistory() {
                       </div>
                       <p className="text-zinc-500 text-xs mt-0.5">{sets.length} set{sets.length !== 1 ? 's' : ''}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-zinc-500 text-xs">Est. 1RM</p>
-                      <p className="text-teal-400 font-semibold text-sm">{bestE1RM} kg</p>
-                    </div>
+                    {isWeight && (
+                      <div className="text-right">
+                        <p className="text-zinc-500 text-xs">Est. 1RM</p>
+                        <p className="text-teal-400 font-semibold text-sm">{bestE1RM} kg</p>
+                      </div>
+                    )}
                   </div>
                   <div className="divide-y divide-zinc-800">
                     {sets.map((s, i) => {
@@ -439,51 +495,59 @@ export default function ExerciseHistory() {
                           <div key={s.id} className="px-5 py-3 bg-zinc-800/80 border-l-2 border-teal-500">
                             <p className="text-zinc-500 text-xs mb-2">Set {i + 1}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-                              <div>
-                                <label className="text-zinc-500 text-xs block mb-0.5">Weight (kg)</label>
-                                <input type="number" value={editValues.weight_kg} min="0" step="0.5"
-                                  onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
-                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-zinc-500 text-xs block mb-0.5">Reps</label>
-                                <input type="number" value={editValues.reps} min="0"
-                                  onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
-                                  className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-zinc-500 text-xs block mb-0.5">Distance</label>
-                                <div className="flex gap-1">
-                                  <input type="number" value={editValues.distance} min="0" step="0.1"
-                                    onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                  />
-                                  <select value={editValues.distance_unit}
-                                    onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
-                                    className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                  >
-                                    <option value="km">km</option>
-                                    <option value="mi">mi</option>
-                                    <option value="m">m</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-zinc-500 text-xs block mb-0.5">Duration</label>
-                                <div className="flex gap-1 items-center">
-                                  <input type="number" value={editValues.duration_min} min="0" placeholder="min"
-                                    onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                  />
-                                  <span className="text-zinc-500 text-xs">:</span>
-                                  <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
-                                    onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
+                              {isWeight && (
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-0.5">Weight (kg)</label>
+                                  <input type="number" value={editValues.weight_kg} min="0" step="0.5"
+                                    onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
                                     className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                                   />
                                 </div>
-                              </div>
+                              )}
+                              {isWeight && (
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-0.5">Reps</label>
+                                  <input type="number" value={editValues.reps} min="0"
+                                    onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
+                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  />
+                                </div>
+                              )}
+                              {trackType === 'distance_time' && (
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-0.5">Distance</label>
+                                  <div className="flex gap-1">
+                                    <input type="number" value={editValues.distance} min="0" step="0.1"
+                                      onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
+                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    />
+                                    <select value={editValues.distance_unit}
+                                      onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
+                                      className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    >
+                                      <option value="km">km</option>
+                                      <option value="mi">mi</option>
+                                      <option value="m">m</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              )}
+                              {(trackType === 'time' || trackType === 'distance_time') && (
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-0.5">Duration</label>
+                                  <div className="flex gap-1 items-center">
+                                    <input type="number" value={editValues.duration_min} min="0" placeholder="min"
+                                      onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
+                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    />
+                                    <span className="text-zinc-500 text-xs">:</span>
+                                    <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
+                                      onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
+                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               {SET_TYPE_OPTIONS.map((opt) => (
@@ -530,7 +594,7 @@ export default function ExerciseHistory() {
                             )}
                             {s.duration_seconds > 0 && (
                               <span className="text-zinc-400 text-sm">
-                                {Math.floor(s.duration_seconds / 60)}:{String(s.duration_seconds % 60).padStart(2, '0')}
+                                {formatDuration(s.duration_seconds)}
                               </span>
                             )}
                             {s.set_type === 'dropset' && (
