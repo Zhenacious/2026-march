@@ -3,9 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Waves } from 'lucide-react';
 
+// Normalize an email so accidental capitalisation / trailing whitespace doesn't
+// create a different account than the one the user thinks they're using.
+function normalizeEmail(value) {
+  return (value || '').trim().toLowerCase();
+}
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -18,18 +25,37 @@ export default function Auth() {
     e.preventDefault();
     setError('');
     setMessage('');
-    setLoading(true);
 
+    const cleanEmail = normalizeEmail(email);
+
+    // Catch wrong-email typos at signup BEFORE we send anything.
+    if (!isLogin && cleanEmail !== normalizeEmail(confirmEmail)) {
+      setError("The two email addresses don't match. Re-check the confirm field.");
+      return;
+    }
+
+    setLoading(true);
     try {
       if (isLogin) {
-        await signIn(email, password);
-        navigate('/dashboard');
+        await signIn(cleanEmail, password);
+        navigate('/today');
       } else {
-        await signUp(email, password);
-        setMessage('Account created! Check your email for a confirmation link, or sign in if confirmation is disabled.');
+        const data = await signUp(cleanEmail, password);
+        if (data?.session) {
+          // Email confirmation is disabled in Supabase — user is already in.
+          navigate('/today');
+        } else {
+          setMessage(
+            `Confirmation link sent to ${cleanEmail}. Check that's the right address — if it isn't, sign up again with the correct one.`
+          );
+        }
       }
     } catch (err) {
-      setError(err.message || 'An error occurred. Please try again.');
+      const raw = err?.message || '';
+      const friendly = /rate.?limit|too many|exceeded/i.test(raw)
+        ? "Sign-up emails are temporarily rate-limited. Try again in a minute, or sign in if you already created your account."
+        : raw || 'Something went wrong. Please try again.';
+      setError(friendly);
     } finally {
       setLoading(false);
     }
@@ -70,10 +96,31 @@ export default function Auth() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete={isLogin ? 'email' : 'off'}
                 placeholder="you@example.com"
                 className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  Confirm email
+                </label>
+                <input
+                  type="email"
+                  value={confirmEmail}
+                  onChange={(e) => setConfirmEmail(e.target.value)}
+                  required
+                  autoComplete="off"
+                  placeholder="Type your email again"
+                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+                <p className="text-zinc-500 text-xs mt-1">
+                  We send a verification link here — make sure it's spelled correctly.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1.5">
@@ -101,7 +148,7 @@ export default function Auth() {
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); }}
+              onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); setConfirmEmail(''); }}
               className="text-sm text-zinc-400 hover:text-teal-400 transition-colors"
             >
               {isLogin
