@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { maybeSeedExercises } from '../lib/seedLibrary';
 
 const AuthContext = createContext(null);
 
@@ -13,6 +14,7 @@ export function AuthProvider({ children }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) maybeSeedExercises(session.user);
     });
 
     const {
@@ -21,6 +23,7 @@ export function AuthProvider({ children }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) maybeSeedExercises(session.user);
     });
 
     return () => subscription.unsubscribe();

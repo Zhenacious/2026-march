@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight, Sparkles } from 'lucide-react';
 import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS } from '../lib/categories';
+import { SEED_EXERCISES } from '../lib/seedExercises';
 
 const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categories: [''] }];
 
@@ -22,6 +23,8 @@ export default function Exercises() {
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [saving, setSaving] = useState(false);
+  const [toppingUp, setToppingUp] = useState(false);
+  const [topUpMsg, setTopUpMsg] = useState(null);
 
   async function fetchExercises() {
     try {
@@ -115,6 +118,63 @@ export default function Exercises() {
     }
   }
 
+  async function handleAddStarter() {
+    setToppingUp(true);
+    setTopUpMsg(null);
+    setError('');
+    try {
+      const categoryByName = Object.fromEntries(
+        SEED_EXERCISES.map((ex) => [ex.name, ex.category])
+      );
+      const candidates = SEED_EXERCISES.map((ex) => ex.name);
+      const existing = exercises.map((ex) => ex.name);
+
+      let toAdd;
+      if (existing.length === 0) {
+        // Empty library — nothing to compare against, so add everything.
+        toAdd = candidates;
+      } else {
+        // Ask the AI which starter exercises aren't already in the library.
+        const res = await fetch('/api/match-exercises', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ existing, candidates }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Request failed (${res.status})`);
+        }
+        const data = await res.json();
+        toAdd = Array.isArray(data.toAdd) ? data.toAdd : [];
+      }
+
+      // Keep only names we recognise from the starter list.
+      const records = toAdd
+        .filter((name) => name in categoryByName)
+        .map((name) => ({ user_id: user.id, name, category: categoryByName[name] }));
+
+      if (records.length === 0) {
+        setTopUpMsg({ type: 'info', text: 'Your library already covers the starter list.' });
+        return;
+      }
+
+      const { error: err } = await supabase
+        .from('exercises')
+        .upsert(records, { onConflict: 'user_id,name', ignoreDuplicates: true });
+      if (err) throw err;
+
+      await fetchExercises();
+      setTopUpMsg({
+        type: 'success',
+        text: `Added ${records.length} new exercise${records.length === 1 ? '' : 's'} to your library.`,
+      });
+    } catch (err) {
+      setError('Could not add starter exercises: ' + err.message);
+    } finally {
+      setToppingUp(false);
+    }
+  }
+
   const { filtered, grouped, sortedCategories } = useMemo(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
     const filtered = exercises.filter((ex) => {
@@ -160,6 +220,34 @@ export default function Exercises() {
           {error}
         </div>
       )}
+
+      {/* Starter exercises — add common gym exercises you don't already have */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-zinc-100 font-semibold text-sm">Starter exercises</h2>
+          <p className="text-zinc-500 text-xs mt-0.5">
+            Add common gym exercises you don't already have.
+          </p>
+          {topUpMsg && (
+            <p
+              className={`text-xs mt-1.5 ${
+                topUpMsg.type === 'success' ? 'text-green-400' : 'text-zinc-400'
+              }`}
+            >
+              {topUpMsg.text}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleAddStarter}
+          disabled={toppingUp || loading}
+          className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 text-zinc-100 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors flex items-center gap-1.5 flex-shrink-0"
+        >
+          <Sparkles className="w-4 h-4" />
+          {toppingUp ? 'Checking…' : 'Add starter exercises'}
+        </button>
+      </div>
 
       {/* Add exercise — always visible, compact inline form */}
       <form onSubmit={handleAdd} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
