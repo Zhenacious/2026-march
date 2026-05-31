@@ -417,7 +417,7 @@ export default function WorkoutLog() {
         onMoveDown={() => handleReorder(set.id, orderedList, 'down')}
         onDelete={handleDeleteSet}
         onEditStart={() => startEdit(set)}
-        onGoToExercise={(name) => navigate(`/exercises/${encodeURIComponent(name)}`)}
+        onGoToExercise={(name) => navigate(`/exercises/${encodeURIComponent(name)}`, { state: { from: `/workouts?date=${selectedDate}` } })}
         onChangeSetType={handleChangeSetType}
       />
     );
@@ -754,7 +754,7 @@ export default function WorkoutLog() {
                   <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800/60">
                     {color && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color.dot}`} />}
                     <button
-                      onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`)}
+                      onClick={() => navigate(`/exercises/${encodeURIComponent(name)}`, { state: { from: `/workouts?date=${selectedDate}` } })}
                       className="text-zinc-100 text-sm font-semibold flex-1 text-left hover:text-violet-400 transition-colors"
                     >
                       {name}

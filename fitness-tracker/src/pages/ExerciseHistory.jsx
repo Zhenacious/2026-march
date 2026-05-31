@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -10,6 +10,26 @@ import {
 } from 'recharts';
 import { CATEGORY_COLORS } from '../lib/categories';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration } from '../lib/trackTypes';
+import { TIME_RANGES, rangeCutoff } from '../lib/timeRanges';
+
+// Friendly names for the page you came from, so the back button can say
+// "Back to Progress" etc. Falls back to the Exercise Library when unknown
+// (e.g. you opened the page from a direct link or refreshed).
+const ORIGIN_LABELS = {
+  '/exercises': 'Exercise Library',
+  '/records': 'Personal Records',
+  '/progress': 'Progress',
+  '/today': 'Today',
+  '/workouts': 'Workout Log',
+  '/calendar': 'Calendar',
+  '/dashboard': 'Dashboard',
+};
+
+function labelForPath(path) {
+  if (!path) return 'Exercise Library';
+  const base = '/' + (path.split('?')[0].split('/').filter(Boolean)[0] || '');
+  return ORIGIN_LABELS[base] || 'Back';
+}
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -32,10 +52,11 @@ export default function ExerciseHistory() {
   const exerciseName = decodeURIComponent(name);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [exercise, setExercise] = useState(null);
   const [sessions, setSessions] = useState([]); // [{ date, sets: [] }]
-  const [chartData, setChartData] = useState([]);
+  const [timeRange, setTimeRange] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [bodyWeights] = useState(() => loadBodyWeights());
@@ -69,6 +90,16 @@ export default function ExerciseHistory() {
       return { date: format(parseISO(date), 'MMM d yy'), 'Est. 1RM': maxE1RM };
     });
   }
+
+  // Chart data is derived from the loaded sessions + the selected time range,
+  // so changing the range (or editing a set) updates the chart with no refetch.
+  const chartData = useMemo(() => {
+    const cutoff = rangeCutoff(timeRange);
+    const inRange = cutoff
+      ? sessions.filter((s) => parseISO(s.date) >= cutoff)
+      : sessions;
+    return buildChartFromSessions(inRange);
+  }, [sessions, timeRange, bodyWeights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchHistory() {
@@ -131,8 +162,6 @@ export default function ExerciseHistory() {
           .sort(([a], [b]) => b.localeCompare(a))
           .map(([date, dateSets]) => ({ date, sets: dateSets }));
         setSessions(sorted);
-
-        setChartData(buildChartFromSessions(sorted));
       } catch (err) {
         setError(err.message);
       } finally {
@@ -159,8 +188,8 @@ export default function ExerciseHistory() {
           .from('workout_sets')
           .update({ exercise_name: newName })
           .eq('exercise_name', exerciseName);
-        // Navigate to the new URL
-        navigate(`/exercises/${encodeURIComponent(newName)}`, { replace: true });
+        // Navigate to the new URL, keeping the "came from" origin intact.
+        navigate(`/exercises/${encodeURIComponent(newName)}`, { replace: true, state: location.state });
         return;
       }
       setExercise((prev) => ({ ...prev, name: newName, category: editExCategory, track_type: editExType }));
@@ -211,7 +240,6 @@ export default function ExerciseHistory() {
         sets: sess.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
       }));
       setSessions(updated);
-      setChartData(buildChartFromSessions(updated));
       cancelEdit();
     } catch (err) {
       setError(err.message);
@@ -232,7 +260,6 @@ export default function ExerciseHistory() {
         )
         .filter((sess) => sess.sets.length > 0);
       setSessions(updated);
-      setChartData(buildChartFromSessions(updated));
     } catch (err) {
       setError(err.message);
     }
@@ -271,20 +298,25 @@ export default function ExerciseHistory() {
   const prevName = currentIndex > 0 ? allNames[currentIndex - 1] : null;
   const nextName = currentIndex >= 0 && currentIndex < allNames.length - 1 ? allNames[currentIndex + 1] : null;
 
+  // Where the back button returns to — remembered from wherever you opened
+  // this page (passed via router state), defaulting to the Exercise Library.
+  const backTo = location.state?.from || '/exercises';
+  const backLabel = labelForPath(location.state?.from);
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <button
-          onClick={() => navigate('/exercises')}
+          onClick={() => navigate(backTo)}
           className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Exercise Library
+          Back to {backLabel}
         </button>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => prevName && navigate(`/exercises/${encodeURIComponent(prevName)}`)}
+            onClick={() => prevName && navigate(`/exercises/${encodeURIComponent(prevName)}`, { state: location.state })}
             disabled={!prevName}
             title={prevName ? `Previous: ${prevName}` : 'No previous exercise'}
             className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors"
@@ -292,7 +324,7 @@ export default function ExerciseHistory() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
-            onClick={() => nextName && navigate(`/exercises/${encodeURIComponent(nextName)}`)}
+            onClick={() => nextName && navigate(`/exercises/${encodeURIComponent(nextName)}`, { state: location.state })}
             disabled={!nextName}
             title={nextName ? `Next: ${nextName}` : 'No next exercise'}
             className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-500 p-1.5 rounded-xl hover:bg-zinc-800 transition-colors"
@@ -429,26 +461,49 @@ export default function ExerciseHistory() {
           )}
 
           {/* e1RM chart — kg-based, only for weight & reps exercises */}
-          {isWeight && chartData.length > 1 && (
+          {isWeight && sessions.length > 1 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
-              <h2 className="text-zinc-100 font-semibold mb-1">Estimated 1RM Progress</h2>
-              <p className="text-zinc-500 text-xs mb-4">{sessions.length} sessions</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                  <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
-                  <YAxis tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="Est. 1RM"
-                    stroke="#14b8a6"
-                    strokeWidth={2}
-                    dot={{ fill: '#14b8a6', r: 3 }}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h2 className="text-zinc-100 font-semibold">Estimated 1RM Progress</h2>
+                <div className="flex gap-1 flex-wrap">
+                  {TIME_RANGES.map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() => setTimeRange(t.value)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                        timeRange === t.value
+                          ? 'bg-teal-600 text-white border-teal-600'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600 hover:text-zinc-200'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-zinc-500 text-xs mb-4">{chartData.length} session{chartData.length !== 1 ? 's' : ''}</p>
+              {chartData.length > 1 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                    <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
+                    <YAxis tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line
+                      type="monotone"
+                      dataKey="Est. 1RM"
+                      stroke="#14b8a6"
+                      strokeWidth={2}
+                      dot={{ fill: '#14b8a6', r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[200px] text-zinc-600 text-sm">
+                  Not enough data in this range
+                </div>
+              )}
             </div>
           )}
 

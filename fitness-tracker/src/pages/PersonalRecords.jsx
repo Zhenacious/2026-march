@@ -129,7 +129,7 @@ export default function PersonalRecords() {
             return (
               <button
                 key={rec.name}
-                onClick={() => navigate(`/exercises/${encodeURIComponent(rec.name)}`)}
+                onClick={() => navigate(`/exercises/${encodeURIComponent(rec.name)}`, { state: { from: '/records' } })}
                 className="w-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 rounded-2xl px-4 py-3.5 text-left transition-colors"
               >
                 <div className="flex items-center gap-2 mb-2.5">

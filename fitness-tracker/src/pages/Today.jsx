@@ -1159,7 +1159,7 @@ export default function Today() {
             onUpdateSet={(id, vals) => updateSetFor(id, vals)}
             onDeleteSet={handleDeleteSet}
             onCycleSetType={handleCycleSetType}
-            onViewHistory={() => navigate(`/exercises/${encodeURIComponent(openExercise)}`)}
+            onViewHistory={() => navigate(`/exercises/${encodeURIComponent(openExercise)}`, { state: { from: `/today?date=${selectedDate}` } })}
             onClose={() => setOpenExercise(null)}
             onPrev={onPrevExercise}
             onNext={onNextExercise}

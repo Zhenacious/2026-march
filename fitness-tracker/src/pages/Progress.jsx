@@ -19,6 +19,7 @@ import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import { MUSCLE_GROUPS } from '../lib/categories';
 import { DEFAULT_TRACK_TYPE, trackTypeLabel } from '../lib/trackTypes';
+import { TIME_RANGES, rangeCutoff, rangeDateFormat } from '../lib/timeRanges';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -127,10 +128,7 @@ export default function Progress() {
 
     try {
       // Apply time scale cutoff
-      const now = new Date();
-      let cutoff = null;
-      if (timeScale === 'year') { cutoff = new Date(now); cutoff.setFullYear(cutoff.getFullYear() - 1); }
-      if (timeScale === 'month') { cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - 1); }
+      const cutoff = rangeCutoff(timeScale);
 
       let query = supabase.from('workouts').select('id, date').eq('user_id', user.id).order('date');
       if (cutoff) query = query.gte('date', format(cutoff, 'yyyy-MM-dd'));
@@ -168,7 +166,7 @@ export default function Progress() {
       const data = Object.entries(byDate)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, vals]) => ({
-          date: format(parseISO(date), timeScale === 'month' ? 'MMM d' : 'MMM d yy'),
+          date: format(parseISO(date), rangeDateFormat(timeScale)),
           isoDate: date,
           'Est. 1RM (kg)': vals.maxE1RM,
           'Total Volume (kg)': Math.round(vals.totalVolume),
@@ -195,7 +193,7 @@ export default function Progress() {
   }, [selectedExercise]);
 
   function handleChartClick() {
-    if (selectedExercise) navigate(`/exercises/${encodeURIComponent(selectedExercise)}`);
+    if (selectedExercise) navigate(`/exercises/${encodeURIComponent(selectedExercise)}`, { state: { from: '/progress' } });
   }
 
   return (
@@ -211,7 +209,7 @@ export default function Progress() {
 
       {/* Time scale */}
       <div className="flex gap-1.5 mb-6">
-        {[{ label: 'All Time', value: 'all' }, { label: '1 Year', value: 'year' }, { label: '1 Month', value: 'month' }].map((t) => (
+        {TIME_RANGES.map((t) => (
           <button
             key={t.value}
             onClick={() => setTimeScale(t.value)}
@@ -249,7 +247,7 @@ export default function Progress() {
           <div className="flex items-center gap-2">
           {selectedExercise && (
             <button
-              onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`)}
+              onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`, { state: { from: '/progress' } })}
               className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-600 text-zinc-300 transition-colors"
             >
               <TrendingUp className="w-3 h-3" />
@@ -343,7 +341,7 @@ export default function Progress() {
               </p>
               {selectedExercise && (
                 <button
-                  onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`)}
+                  onClick={() => navigate(`/exercises/${encodeURIComponent(selectedExercise)}`, { state: { from: '/progress' } })}
                   className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-600 text-zinc-300 transition-colors"
                 >
                   <TrendingUp className="w-3 h-3" /> View history
