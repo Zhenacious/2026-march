@@ -49,11 +49,20 @@ export default function Layout() {
   return (
     <div className="flex flex-col min-h-dvh h-dvh bg-zinc-950 overflow-hidden">
 
+      {/* ── Fixed safe-area fill: with black-translucent the status bar is see-through,
+           so we paint zinc-950 behind it to keep it dark on all pages, including Today
+           where the logo header is hidden. pointer-events-none so it doesn't block taps. ── */}
+      <div
+        className="fixed inset-x-0 top-0 z-[100] bg-zinc-950 pointer-events-none"
+        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+        aria-hidden="true"
+      />
+
       {/* ── Simple top bar (no slide-out drawer — avoids odd Safari window / chrome shifts) ──
            Hidden on the Today route: the date header there acts as the title, so the logo
            bar is redundant and just eats vertical space on the main logging screen. ── */}
       {!isTodayRoute && (
-        <header className="flex items-center justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3.5 bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-30">
+        <header className="flex items-center justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3.5 bg-zinc-950 border-b border-zinc-800 flex-shrink-0 z-30">
           <NavLink to="/today" className="flex items-center gap-2.5" onClick={() => setMoreOpen(false)}>
             <div className="bg-teal-600 p-1.5 rounded-lg">
               <Waves className="w-4 h-4 text-white" />
