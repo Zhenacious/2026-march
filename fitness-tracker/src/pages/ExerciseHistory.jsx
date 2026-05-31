@@ -6,11 +6,11 @@ import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, Ch
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
 import { format, parseISO } from 'date-fns';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { CATEGORY_COLORS } from '../lib/categories';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration } from '../lib/trackTypes';
-import { TIME_RANGES, rangeCutoff } from '../lib/timeRanges';
+import { TIME_RANGES, rangeCutoff, rangeDateFormat } from '../lib/timeRanges';
 
 // Friendly names for the page you came from, so the back button can say
 // "Back to Progress" etc. Falls back to the Exercise Library when unknown
@@ -78,27 +78,32 @@ export default function ExerciseHistory() {
 
   const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
 
-  function buildChartFromSessions(sessionList) {
+  function buildChartFromSessions(sessionList, dateFmt = 'MMM d yy') {
     const ascending = [...sessionList].reverse();
     return ascending.map(({ date, sets }) => {
-      const maxE1RM = Math.max(...sets.map((s) => {
+      const e1rmValues = sets.map((s) => {
         const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
         return (s.reps || 0) > 0
           ? Math.round(effW * (1 + (s.reps || 0) / 30) * 10) / 10
           : effW;
-      }));
-      return { date: format(parseISO(date), 'MMM d yy'), 'Est. 1RM': maxE1RM };
+      });
+      const maxE1RM = e1rmValues.length ? Math.max(...e1rmValues) : 0;
+      const totalVolume = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
+      return {
+        date: format(parseISO(date), dateFmt),
+        'Est. 1RM': maxE1RM || null,
+        'Volume (kg)': Math.round(totalVolume) || null,
+      };
     });
   }
 
-  // Chart data is derived from the loaded sessions + the selected time range,
-  // so changing the range (or editing a set) updates the chart with no refetch.
+  // Chart data derived from sessions + time range — no extra fetches needed.
   const chartData = useMemo(() => {
     const cutoff = rangeCutoff(timeRange);
     const inRange = cutoff
       ? sessions.filter((s) => parseISO(s.date) >= cutoff)
       : sessions;
-    return buildChartFromSessions(inRange);
+    return buildChartFromSessions(inRange, rangeDateFormat(timeRange));
   }, [sessions, timeRange, bodyWeights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -460,11 +465,12 @@ export default function ExerciseHistory() {
             </div>
           )}
 
-          {/* e1RM chart — kg-based, only for weight & reps exercises */}
+          {/* Charts — only for weight & reps exercises with enough sessions */}
           {isWeight && sessions.length > 1 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
-              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                <h2 className="text-zinc-100 font-semibold">Estimated 1RM Progress</h2>
+            <>
+              {/* Shared time-range filter */}
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <p className="text-zinc-500 text-xs">{chartData.length} session{chartData.length !== 1 ? 's' : ''}</p>
                 <div className="flex gap-1 flex-wrap">
                   {TIME_RANGES.map((t) => (
                     <button
@@ -481,30 +487,43 @@ export default function ExerciseHistory() {
                   ))}
                 </div>
               </div>
-              <p className="text-zinc-500 text-xs mb-4">{chartData.length} session{chartData.length !== 1 ? 's' : ''}</p>
-              {chartData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                    <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
-                    <YAxis tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="Est. 1RM"
-                      stroke="#14b8a6"
-                      strokeWidth={2}
-                      dot={{ fill: '#14b8a6', r: 3 }}
-                      activeDot={{ r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-[200px] text-zinc-600 text-sm">
-                  Not enough data in this range
-                </div>
-              )}
-            </div>
+
+              {/* Estimated 1RM line chart */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-4">
+                <h2 className="text-zinc-100 font-semibold mb-4">Estimated 1RM</h2>
+                {chartData.length > 1 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                      <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
+                      <YAxis tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Line type="monotone" dataKey="Est. 1RM" stroke="#14b8a6" strokeWidth={2} dot={{ fill: '#14b8a6', r: 3 }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px] text-zinc-600 text-sm">Not enough data in this range</div>
+                )}
+              </div>
+
+              {/* Volume per session bar chart */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
+                <h2 className="text-zinc-100 font-semibold mb-4">Volume per Session</h2>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                      <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
+                      <YAxis tick={{ fill: '#71717a', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} unit=" kg" />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="Volume (kg)" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px] text-zinc-600 text-sm">Not enough data in this range</div>
+                )}
+              </div>
+            </>
           )}
 
           {/* Session history */}

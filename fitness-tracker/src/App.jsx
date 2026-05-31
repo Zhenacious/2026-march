@@ -9,7 +9,7 @@ import WorkoutLog from './pages/WorkoutLog';
 import { useSearchParams } from 'react-router-dom';
 import Exercises from './pages/Exercises';
 import CalendarView from './pages/CalendarView';
-import Progress from './pages/Progress';
+// Progress page removed — charts now live on the Exercise History page.
 import Import from './pages/Import';
 import ExerciseHistory from './pages/ExerciseHistory';
 import BodyWeightTracker from './pages/BodyWeightTracker';
@@ -85,7 +85,7 @@ export default function App() {
         <Route path="/exercises" element={<Exercises />} />
         <Route path="/exercises/:name" element={<ExerciseHistory />} />
         <Route path="/calendar" element={<CalendarView />} />
-        <Route path="/progress" element={<Progress />} />
+        <Route path="/progress" element={<Navigate to="/exercises" replace />} />
         <Route path="/import" element={<Import />} />
         <Route path="/body-weight" element={<BodyWeightTracker />} />
         <Route path="/records" element={<PersonalRecords />} />
