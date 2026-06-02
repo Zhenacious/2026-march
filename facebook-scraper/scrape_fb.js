@@ -126,11 +126,11 @@ async function getTotalCommentCount(page) {
   }
 }
 
-// Scroll the comment panel using mouse wheel positioned over the right side of the screen
-async function scrollPanel(page) {
+// Scroll using mouse wheel. For reels the panel is on the right; for posts scroll the centre.
+async function scrollPanel(page, isReel) {
   const vp = page.viewportSize() || { width: 1280, height: 720 };
-  // Comment panel sits on the right ~40% of the screen for reels
-  await page.mouse.move(vp.width * 0.75, vp.height * 0.5);
+  const x = isReel ? vp.width * 0.75 : vp.width * 0.5;
+  await page.mouse.move(x, vp.height * 0.5);
   await page.mouse.wheel(0, 700);
   await page.waitForTimeout(800);
 }
@@ -167,55 +167,55 @@ async function clickReplyButtons(page) {
   return clicked;
 }
 
-async function loadReelComments(page) {
+async function loadAllContent(page, isReel) {
   const total = await getTotalCommentCount(page);
   if (total) console.log(`  Target: ${total} comments`);
 
-  // Phase 1: scroll + click "View more comments" until count stops growing
-  console.log('  Phase 1: loading all top-level comments...');
+  // Phase 1: load all top-level comments via button clicks + scrolling
+  console.log('  Phase 1: loading all comments...');
   let lastCount = -1;
   let stale = 0;
   for (let i = 0; i < 200; i++) {
-    const count = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
-    process.stdout.write(`  ${count}${total ? '/' + total : ''} comments loaded\r`);
+    const count = await page.evaluate(() =>
+      Math.max(
+        document.querySelectorAll('[role="article"]').length,
+        document.querySelectorAll('[data-commentid]').length
+      )
+    );
+    process.stdout.write(`  ${count}${total ? '/' + total : ''} loaded\r`);
     if (total && count >= total) break;
+    if (count === lastCount) { stale++; if (stale >= 5) break; } else { stale = 0; lastCount = count; }
 
-    if (count === lastCount) {
-      stale++;
-      if (stale >= 5) break; // 5 rounds with no new comments = done
-    } else {
-      stale = 0;
-      lastCount = count;
-    }
-
-    // Try the button first; if not there, scroll to reveal more
     const btnClicked = await clickMoreComments(page);
-    if (!btnClicked) await scrollPanel(page);
+    if (!btnClicked) await scrollPanel(page, isReel);
   }
-  const p1count = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
-  console.log(`  Phase 1 done: ${p1count} comments.    `);
+  const p1 = await page.evaluate(() =>
+    Math.max(document.querySelectorAll('[role="article"]').length, document.querySelectorAll('[data-commentid]').length)
+  );
+  console.log(`  Phase 1 done: ${p1} loaded.    `);
 
-  // Phase 2: expand all reply threads (multiple passes until none left)
+  // Phase 2: expand all reply threads
   console.log('  Phase 2: expanding replies...');
   for (let pass = 1; pass <= 15; pass++) {
     const clicked = await clickReplyButtons(page);
     if (clicked === 0) break;
-    console.log(`  Reply pass ${pass}: clicked ${clicked} buttons`);
+    console.log(`  Reply pass ${pass}: ${clicked} threads opened`);
     await page.waitForTimeout(400);
   }
   console.log('  Phase 2 done.');
 
-  // Phase 3: one final "View more comments" sweep in case replies revealed more
+  // Phase 3: final sweep — replies may have surfaced more "View more comments"
   console.log('  Phase 3: final sweep...');
   let extra = 0;
   for (let i = 0; i < 30; i++) {
-    const clicked = await clickMoreComments(page);
-    if (!clicked) { await scrollPanel(page); break; }
+    if (!await clickMoreComments(page)) break;
     extra++;
   }
   await clickReplyButtons(page);
-  const finalCount = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
-  console.log(`  Phase 3 done. Total: ${finalCount} elements.`);
+  const final = await page.evaluate(() =>
+    Math.max(document.querySelectorAll('[role="article"]').length, document.querySelectorAll('[data-commentid]').length)
+  );
+  console.log(`  Done. ${final} total elements${extra ? `, ${extra} extra batches in final sweep` : ''}.`);
 }
 
 async function extractComments(page, postUrl) {
@@ -306,15 +306,8 @@ async function scrape(url) {
   }
 
   const isReel = await openReelComments(page);
-
   console.log('Loading all comments...');
-  if (isReel) {
-    await loadReelComments(page);
-  } else {
-    await loadAllComments(page);
-    console.log('Expanding replies...');
-    await expandAllReplies(page);
-  }
+  await loadAllContent(page, isReel);
 
   console.log('Extracting data...');
   const comments = await extractComments(page, url);
