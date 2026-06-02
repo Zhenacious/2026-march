@@ -61,14 +61,15 @@ async function setupSession() {
 }
 
 async function loadAllComments(page) {
+  // Regular posts: click "View more comments" until it disappears
   let clicks = 0;
   for (let i = 0; i < 100; i++) {
     try {
       const btn = page.locator('text=/more comments/i').first();
-      if (await btn.isVisible({ timeout: 3000 })) {
+      if (await btn.isVisible({ timeout: 2000 })) {
         await btn.scrollIntoViewIfNeeded();
         await btn.click();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(700);
         clicks++;
         process.stdout.write(`  Loading comments... (${clicks} batches)\r`);
       } else {
@@ -82,15 +83,18 @@ async function loadAllComments(page) {
 }
 
 async function expandAllReplies(page) {
-  for (let i = 0; i < 50; i++) {
-    const buttons = await page.locator('text=/\\d+ repl/i').all();
+  // Multiple passes: after clicking replies, new "View more replies" buttons can appear
+  for (let pass = 0; pass < 10; pass++) {
+    const buttons = await page.locator('text=/repl/i').all();
     let expandedAny = false;
     for (const btn of buttons) {
       try {
-        if (await btn.isVisible()) {
+        const label = await btn.textContent();
+        // Only click actual reply expansion buttons, not comment reply links
+        if (label && /\d+\s*repl/i.test(label)) {
           await btn.scrollIntoViewIfNeeded();
           await btn.click();
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(400);
           expandedAny = true;
         }
       } catch { /* skip */ }
@@ -99,10 +103,126 @@ async function expandAllReplies(page) {
   }
 }
 
+async function openReelComments(page) {
+  try {
+    const btn = page.locator('[aria-label="Comment"]').first();
+    if (await btn.isVisible({ timeout: 3000 })) {
+      console.log('  Reel detected — opening comment panel...');
+      await btn.click();
+      await page.waitForTimeout(2000);
+      return true;
+    }
+  } catch { /* not a reel */ }
+  return false;
+}
+
+async function getTotalCommentCount(page) {
+  try {
+    const text = await page.locator('text=/of \\d+ comment/i').first().textContent({ timeout: 2000 });
+    const m = text.match(/of (\d+)/i);
+    return m ? parseInt(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Scroll the comment panel using mouse wheel positioned over the right side of the screen
+async function scrollPanel(page) {
+  const vp = page.viewportSize() || { width: 1280, height: 720 };
+  // Comment panel sits on the right ~40% of the screen for reels
+  await page.mouse.move(vp.width * 0.75, vp.height * 0.5);
+  await page.mouse.wheel(0, 700);
+  await page.waitForTimeout(800);
+}
+
+// Click "View more comments" if visible. Returns true if clicked.
+async function clickMoreComments(page) {
+  try {
+    const btn = page.locator('text=/more comments/i').first();
+    if (await btn.isVisible({ timeout: 800 })) {
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.waitForTimeout(900);
+      return true;
+    }
+  } catch { /* not found */ }
+  return false;
+}
+
+// Click all visible "X replies" buttons. Returns count clicked.
+async function clickReplyButtons(page) {
+  let clicked = 0;
+  const btns = await page.locator('text=/repl/i').all();
+  for (const btn of btns) {
+    try {
+      const label = await btn.textContent();
+      if (label && /\d+\s*repl/i.test(label) && await btn.isVisible()) {
+        await btn.scrollIntoViewIfNeeded();
+        await btn.click();
+        await page.waitForTimeout(500);
+        clicked++;
+      }
+    } catch { /* skip */ }
+  }
+  return clicked;
+}
+
+async function loadReelComments(page) {
+  const total = await getTotalCommentCount(page);
+  if (total) console.log(`  Target: ${total} comments`);
+
+  // Phase 1: scroll + click "View more comments" until count stops growing
+  console.log('  Phase 1: loading all top-level comments...');
+  let lastCount = -1;
+  let stale = 0;
+  for (let i = 0; i < 200; i++) {
+    const count = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
+    process.stdout.write(`  ${count}${total ? '/' + total : ''} comments loaded\r`);
+    if (total && count >= total) break;
+
+    if (count === lastCount) {
+      stale++;
+      if (stale >= 5) break; // 5 rounds with no new comments = done
+    } else {
+      stale = 0;
+      lastCount = count;
+    }
+
+    // Try the button first; if not there, scroll to reveal more
+    const btnClicked = await clickMoreComments(page);
+    if (!btnClicked) await scrollPanel(page);
+  }
+  const p1count = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
+  console.log(`  Phase 1 done: ${p1count} comments.    `);
+
+  // Phase 2: expand all reply threads (multiple passes until none left)
+  console.log('  Phase 2: expanding replies...');
+  for (let pass = 1; pass <= 15; pass++) {
+    const clicked = await clickReplyButtons(page);
+    if (clicked === 0) break;
+    console.log(`  Reply pass ${pass}: clicked ${clicked} buttons`);
+    await page.waitForTimeout(400);
+  }
+  console.log('  Phase 2 done.');
+
+  // Phase 3: one final "View more comments" sweep in case replies revealed more
+  console.log('  Phase 3: final sweep...');
+  let extra = 0;
+  for (let i = 0; i < 30; i++) {
+    const clicked = await clickMoreComments(page);
+    if (!clicked) { await scrollPanel(page); break; }
+    extra++;
+  }
+  await clickReplyButtons(page);
+  const finalCount = await page.evaluate(() => document.querySelectorAll('[role="article"]').length);
+  console.log(`  Phase 3 done. Total: ${finalCount} elements.`);
+}
+
 async function extractComments(page, postUrl) {
   const data = await page.evaluate(() => {
     const out = [];
-    for (const el of document.querySelectorAll('[data-commentid]')) {
+
+    function parseComment(el, parentAuthor) {
       const authorEl = el.querySelector('a[role="link"]');
       const author = authorEl ? authorEl.innerText.trim() : '';
 
@@ -131,19 +251,30 @@ async function extractComments(page, postUrl) {
         }
       }
 
-      const parentComment = el.parentElement
-        ? el.parentElement.closest('[data-commentid]')
-        : null;
-      const isReply = !!(parentComment && parentComment !== el);
-      let replyTo = '';
-      if (isReply) {
-        const pAuthor = parentComment.querySelector('a[role="link"]');
-        replyTo = pAuthor ? pAuthor.innerText.trim() : '';
-      }
+      return { author, commentText, ts, likes, isReply: !!parentAuthor, replyTo: parentAuthor || '' };
+    }
 
-      if (author || commentText) {
-        out.push({ author, commentText, ts, likes, isReply, replyTo });
+    // Strategy 1: data-commentid (regular posts)
+    const byCommentId = document.querySelectorAll('[data-commentid]');
+    if (byCommentId.length) {
+      for (const el of byCommentId) {
+        const parentComment = el.parentElement ? el.parentElement.closest('[data-commentid]') : null;
+        const parentAuthor = (parentComment && parentComment !== el)
+          ? (parentComment.querySelector('a[role="link"]') || {}).innerText || ''
+          : '';
+        const c = parseComment(el, parentAuthor);
+        if (c.author || c.commentText) out.push(c);
       }
+      return out;
+    }
+
+    // Strategy 2: role=article (reels / newer layout)
+    const articles = document.querySelectorAll('[role="article"]');
+    for (const el of articles) {
+      // Skip the post itself (usually the first/outermost article)
+      const parent = el.parentElement ? el.parentElement.closest('[role="article"]') : null;
+      const c = parseComment(el, parent ? (parent.querySelector('a[role="link"]') || {}).innerText || '' : '');
+      if (c.author || c.commentText) out.push(c);
     }
     return out;
   });
@@ -174,23 +305,38 @@ async function scrape(url) {
     process.exit(1);
   }
 
-  console.log('Loading all comments (may take a moment)...');
-  await loadAllComments(page);
+  const isReel = await openReelComments(page);
 
-  console.log('Expanding replies...');
-  await expandAllReplies(page);
+  console.log('Loading all comments...');
+  if (isReel) {
+    await loadReelComments(page);
+  } else {
+    await loadAllComments(page);
+    console.log('Expanding replies...');
+    await expandAllReplies(page);
+  }
 
   console.log('Extracting data...');
   const comments = await extractComments(page, url);
-  await browser.close();
 
   if (!comments.length) {
-    console.log('\nNo comments found.');
-    console.log('Possible reasons:');
-    console.log('  - The post is private or requires login to see comments');
-    console.log('  - Facebook changed its layout (update selectors in extractComments)');
+    console.log('\nNo comments found — saving debug files...');
+    await page.screenshot({ path: path.join(SCRIPT_DIR, 'debug_screenshot.png'), fullPage: false });
+    const html = await page.content();
+    fs.writeFileSync(path.join(SCRIPT_DIR, 'debug_page.html'), html, 'utf8');
+    // Log a summary of what elements exist to help diagnose
+    const summary = await page.evaluate(() => ({
+      dataCommentId: document.querySelectorAll('[data-commentid]').length,
+      roleArticle: document.querySelectorAll('[role="article"]').length,
+      dirAuto: document.querySelectorAll('[dir="auto"]').length,
+    }));
+    console.log(`  Elements found: data-commentid=${summary.dataCommentId}, role=article=${summary.roleArticle}, dir=auto=${summary.dirAuto}`);
+    console.log('Saved debug_screenshot.png and debug_page.html');
+    await browser.close();
     return;
   }
+
+  await browser.close();
 
   const outFile = path.join(SCRIPT_DIR, `comments_${timestamp()}.csv`);
   const header = 'author,comment_text,timestamp,likes,is_reply,reply_to,post_url';
