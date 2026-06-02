@@ -1,2 +1,6 @@
 # Visual-companion / brainstorming server artifacts
 .superpowers/
+
+# Facebook scraper — session cookies and output files (may contain personal data)
+facebook-scraper/fb_session.json
+facebook-scraper/comments_*.csv
