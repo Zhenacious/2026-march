@@ -1,0 +1,13 @@
+{
+  "name": "facebook-scraper",
+  "version": "1.0.0",
+  "description": "Scrape Facebook post comments to CSV",
+  "main": "scrape_fb.js",
+  "scripts": {
+    "setup": "node scrape_fb.js --setup",
+    "scrape": "node scrape_fb.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
