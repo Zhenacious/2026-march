@@ -24,3 +24,11 @@ export const MUSCLE_GROUPS = [
 ];
 
 export const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
+
+// Matches a raw category string (any case/whitespace) against the canonical
+// CATEGORY_OPTIONS list. Anything that doesn't match collapses to '' (uncategorized) —
+// this is what stops "Abs" and "abs" forming two separate groups on the Exercises page.
+export function normalizeCategory(category) {
+  const lower = (category || '').trim().toLowerCase();
+  return CATEGORY_OPTIONS.includes(lower) ? lower : '';
+}
