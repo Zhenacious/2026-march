@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight, Sparkles } from 'lucide-react';
-import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS } from '../lib/categories';
+import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { SEED_EXERCISES } from '../lib/seedExercises';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, trackTypeShort, defaultTrackTypeForCategory } from '../lib/trackTypes';
 
@@ -59,7 +59,7 @@ export default function Exercises() {
       const { error: err } = await supabase.from('exercises').insert({
         user_id: user.id,
         name: newName.trim(),
-        category: newCategory.trim(),
+        category: normalizeCategory(newCategory),
         track_type: newType,
       });
       if (err) throw err;
@@ -108,14 +108,15 @@ export default function Exercises() {
     setSaving(true);
     setError('');
     try {
+      const normalized = normalizeCategory(editCategory);
       const { error: err } = await supabase
         .from('exercises')
-        .update({ name: editName.trim(), category: editCategory, track_type: editType })
+        .update({ name: editName.trim(), category: normalized, track_type: editType })
         .eq('id', id)
         .eq('user_id', user.id);
       if (err) throw err;
       setExercises((prev) =>
-        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: editCategory, track_type: editType } : ex)
+        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: normalized, track_type: editType } : ex)
       );
       cancelEdit();
     } catch (err) {
@@ -190,7 +191,7 @@ export default function Exercises() {
   const { filtered, grouped, sortedCategories } = useMemo(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);
     const filtered = exercises.filter((ex) => {
-      const cat = (ex.category || '').toLowerCase();
+      const cat = normalizeCategory(ex.category);
       const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
       const matchesGroup =
         group.categories === null ||
@@ -200,7 +201,7 @@ export default function Exercises() {
       return matchesSearch && matchesGroup;
     });
     const grouped = filtered.reduce((acc, ex) => {
-      const cat = ex.category || '';
+      const cat = normalizeCategory(ex.category);
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(ex);
       return acc;
@@ -214,7 +215,7 @@ export default function Exercises() {
   }, [exercises, search, activeGroup]);
 
   const uncategorizedCount = useMemo(
-    () => exercises.filter((ex) => !ex.category || ex.category.trim() === '').length,
+    () => exercises.filter((ex) => !normalizeCategory(ex.category)).length,
     [exercises]
   );
 
