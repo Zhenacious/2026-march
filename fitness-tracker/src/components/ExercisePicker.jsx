@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
-import { CATEGORY_COLORS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS } from '../lib/categories';
+import { CATEGORY_COLORS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 
 const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Other', categories: [''] }];
 
@@ -19,7 +19,7 @@ export default function ExercisePicker({ exercises, onSelect, onClose }) {
 
   const filtered = exercises.filter((ex) => {
     const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
-    const cat = (ex.category || '').toLowerCase();
+    const cat = normalizeCategory(ex.category);
     const matchesGroup =
       group.categories === null ||
       (activeGroup === 'Other' ? !Object.keys(CATEGORY_COLORS).includes(cat) : group.categories.includes(cat));
@@ -28,7 +28,7 @@ export default function ExercisePicker({ exercises, onSelect, onClose }) {
 
   // Group filtered exercises by category for display
   const grouped = filtered.reduce((acc, ex) => {
-    const cat = ex.category || '';
+    const cat = normalizeCategory(ex.category);
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(ex);
     return acc;
