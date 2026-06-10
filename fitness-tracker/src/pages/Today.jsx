@@ -4,11 +4,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
-import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
+import { CATEGORY_COLORS, MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, DISTANCE_UNITS, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues } from '../lib/trackTypes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
+import MuscleGroupPicker from '../components/MuscleGroupPicker';
 
 // FILTER_TABS is just MUSCLE_GROUPS — alias so the sheet component still works
 const FILTER_TABS = MUSCLE_GROUPS;
@@ -424,6 +425,7 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
+  const [newCategory, setNewCategory] = useState('');
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -522,7 +524,7 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
           {canCreate && (
             <div className="rounded-xl ring-1 ring-teal-500/40 overflow-hidden">
               <button
-                onClick={() => onSelect(search.trim(), newType)}
+                onClick={() => onSelect(search.trim(), newType, newCategory)}
                 className="w-full flex items-center gap-3 px-3 py-3 hover:bg-zinc-800 transition-colors text-left"
               >
                 <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
@@ -533,16 +535,24 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
                   <p className="text-zinc-500 text-xs">Add as a new exercise</p>
                 </div>
               </button>
-              <div className="px-3 pb-3 pt-1 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wide text-zinc-500 mr-1">Tracks</span>
-                {TRACK_TYPES.map((t) => (
-                  <button key={t.value} type="button" onClick={(e) => { e.stopPropagation(); setNewType(t.value); }}
-                    className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                      newType === t.value
-                        ? 'bg-teal-600 text-white border-teal-600'
-                        : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-                    }`}>{t.label}</button>
-                ))}
+              <div className="px-3 pb-3 pt-1 space-y-2.5">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1.5">Category</p>
+                  <MuscleGroupPicker value={newCategory} onChange={setNewCategory} />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1.5">Tracks</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {TRACK_TYPES.map((t) => (
+                      <button key={t.value} type="button" onClick={(e) => { e.stopPropagation(); setNewType(t.value); }}
+                        className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                          newType === t.value
+                            ? 'bg-teal-600 text-white border-teal-600'
+                            : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                        }`}>{t.label}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -845,14 +855,14 @@ export default function Today() {
     setOpenExercise(name);
   }
 
-  async function handlePickExercise(name, typeForNew) {
+  async function handlePickExercise(name, typeForNew, categoryForNew = '') {
     setShowSheet(false);
     const alreadyExists = exercises.some((ex) => ex.name.toLowerCase() === name.toLowerCase());
     if (!alreadyExists) {
       const { data: newEx } = await supabase
         .from('exercises')
         .upsert(
-          { user_id: user.id, name, category: '', track_type: typeForNew || DEFAULT_TRACK_TYPE },
+          { user_id: user.id, name, category: normalizeCategory(categoryForNew), track_type: typeForNew || DEFAULT_TRACK_TYPE },
           { onConflict: 'user_id,name' }
         )
         .select('*').single();
