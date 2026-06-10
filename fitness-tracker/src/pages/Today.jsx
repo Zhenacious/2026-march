@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import MuscleGroupPicker from '../components/MuscleGroupPicker';
+import ExerciseEditDialog from '../components/ExerciseEditDialog';
 
 // FILTER_TABS is just MUSCLE_GROUPS — alias so the sheet component still works
 const FILTER_TABS = MUSCLE_GROUPS;
@@ -421,11 +422,12 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
 }
 
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
-function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect, onClose }) {
+function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect, onClose, onEditExercise }) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
   const [newCategory, setNewCategory] = useState('');
+  const [editingId, setEditingId] = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -565,23 +567,46 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
             const cat = (ex.category || '').toLowerCase();
             const color = CATEGORY_COLORS[cat] || null;
             return (
-              <button
+              <div
                 key={ex.id}
-                onClick={() => onSelect(ex.name)}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-800 transition-colors text-left"
+                className="flex items-center gap-1 px-1.5 py-2 rounded-xl hover:bg-zinc-800/50 transition-colors group"
               >
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
-                <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
-                {color && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>
-                    {color.label}
-                  </span>
-                )}
-              </button>
+                <button
+                  onClick={() => onSelect(ex.name)}
+                  className="flex-1 flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors text-left"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
+                  <span className="text-zinc-200 text-sm flex-1">{ex.name}</span>
+                  {color && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded border ${color.badge} font-medium`}>
+                      {color.label}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditingId(ex.id); }}
+                  className="p-1.5 text-zinc-600 hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
             );
           })}
         </div>
       </div>
+
+      {/* Exercise edit dialog */}
+      {editingId && (
+        <ExerciseEditDialog
+          exercise={exercises.find((e) => e.id === editingId)}
+          onSave={(changes) => {
+            onEditExercise?.(editingId, { ...changes, category: normalizeCategory(changes.category) });
+            setEditingId(null);
+          }}
+          onCancel={() => setEditingId(null)}
+          isSaving={false}
+        />
+      )}
     </motion.div>
   );
 }
@@ -869,6 +894,22 @@ export default function Today() {
       if (newEx) setExercises((prev) => [...prev, newEx].sort((a, b) => a.name.localeCompare(b.name)));
     }
     await openLog(name);
+  }
+
+  async function handleEditExercise(id, changes) {
+    try {
+      const { error: err } = await supabase
+        .from('exercises')
+        .update(changes)
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (err) throw err;
+      setExercises((prev) =>
+        prev.map((ex) => ex.id === id ? { ...ex, ...changes } : ex)
+      );
+    } catch (err) {
+      console.error('Failed to update exercise:', err.message);
+    }
   }
 
   async function addSetFor(name, values) {
@@ -1186,6 +1227,7 @@ export default function Today() {
             freqMap={freqMap}
             onSelect={handlePickExercise}
             onClose={() => setShowSheet(false)}
+            onEditExercise={handleEditExercise}
           />
         )}
       </AnimatePresence>
