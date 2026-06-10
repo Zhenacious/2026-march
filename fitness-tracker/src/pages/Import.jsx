@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { parseFitNotesCSV } from '../lib/fitnotes';
+import { normalizeCategory } from '../lib/categories';
 import { Upload, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
 
 export default function Import() {
@@ -42,7 +43,7 @@ export default function Import() {
       const uniqueExercises = [...new Set(parsedRows.map((r) => r.exercise))];
       const exerciseRecords = uniqueExercises.map((name) => {
         const row = parsedRows.find((r) => r.exercise === name);
-        return { user_id: user.id, name, category: row?.category || '' };
+        return { user_id: user.id, name, category: normalizeCategory(row?.category) };
       });
 
       const { error: exErr } = await supabase
