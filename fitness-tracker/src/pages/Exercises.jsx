@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight, Sparkles } from 'lucide-react';
-import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
+import { CATEGORY_COLORS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { SEED_EXERCISES } from '../lib/seedExercises';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, trackTypeShort, defaultTrackTypeForCategory } from '../lib/trackTypes';
 import MuscleGroupPicker from '../components/MuscleGroupPicker';
 import TrackTypePicker from '../components/TrackTypePicker';
+import ExerciseEditDialog from '../components/ExerciseEditDialog';
 
 const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categories: [''] }];
 
@@ -24,9 +25,6 @@ export default function Exercises() {
   const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
-  const [editCategory, setEditCategory] = useState('');
-  const [editType, setEditType] = useState(DEFAULT_TRACK_TYPE);
   const [saving, setSaving] = useState(false);
   const [toppingUp, setToppingUp] = useState(false);
   const [topUpMsg, setTopUpMsg] = useState(null);
@@ -93,32 +91,24 @@ export default function Exercises() {
 
   function startEdit(ex) {
     setEditingId(ex.id);
-    setEditName(ex.name);
-    setEditCategory(ex.category || '');
-    setEditType(ex.track_type || DEFAULT_TRACK_TYPE);
   }
 
   function cancelEdit() {
     setEditingId(null);
-    setEditName('');
-    setEditCategory('');
-    setEditType(DEFAULT_TRACK_TYPE);
   }
 
-  async function handleSaveEdit(id) {
-    if (!editName.trim()) return;
+  async function handleSaveEdit(id, changes) {
     setSaving(true);
     setError('');
     try {
-      const normalized = normalizeCategory(editCategory);
       const { error: err } = await supabase
         .from('exercises')
-        .update({ name: editName.trim(), category: normalized, track_type: editType })
+        .update(changes)
         .eq('id', id)
         .eq('user_id', user.id);
       if (err) throw err;
       setExercises((prev) =>
-        prev.map((ex) => ex.id === id ? { ...ex, name: editName.trim(), category: normalized, track_type: editType } : ex)
+        prev.map((ex) => ex.id === id ? { ...ex, ...changes } : ex)
       );
       cancelEdit();
     } catch (err) {
@@ -359,99 +349,33 @@ export default function Exercises() {
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden divide-y divide-zinc-800">
                   {grouped[cat].map((ex) => (
                     <div key={ex.id} className="px-4 py-2.5 hover:bg-zinc-800/50 transition-colors">
-                      {editingId === ex.id ? (
-                        <div className="space-y-2">
-                          <input
-                            autoFocus
-                            type="text"
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(ex.id); if (e.key === 'Escape') cancelEdit(); }}
-                            className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          />
-                          {/* Category chips in edit mode */}
-                          <div className="flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => setEditCategory('')}
-                              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                                editCategory === ''
-                                  ? 'bg-zinc-600 text-zinc-100 border-zinc-500'
-                                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
-                              }`}
-                            >None</button>
-                            {CATEGORY_OPTIONS.map((c) => {
-                              const col = CATEGORY_COLORS[c.toLowerCase()];
-                              const isActive = editCategory === c;
-                              return (
-                                <button key={c} type="button" onClick={() => setEditCategory(c)}
-                                  className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors flex items-center gap-1 ${
-                                    isActive
-                                      ? `${col?.badge || 'bg-zinc-700 text-zinc-100 border-zinc-600'}`
-                                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
-                                  }`}
-                                >
-                                  {col && <span className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />}
-                                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {/* Track type chips in edit mode */}
-                          <div className="flex flex-wrap gap-1.5">
-                            {TRACK_TYPES.map((t) => (
-                              <button key={t.value} type="button" onClick={() => setEditType(t.value)}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                                  editType === t.value
-                                    ? 'bg-teal-600 text-white border-teal-600'
-                                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'
-                                }`}
-                              >{t.label}</button>
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleSaveEdit(ex.id)}
-                              disabled={saving}
-                              className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              <Check className="w-3.5 h-3.5" /> Save
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="text-zinc-400 hover:text-zinc-200 text-xs px-3 py-1.5 rounded-lg transition-colors border border-zinc-700 hover:border-zinc-600"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
-                          <button
-                            onClick={() => navigate(`/exercises/${encodeURIComponent(ex.name)}`)}
-                            className="text-zinc-200 text-sm flex-1 text-left hover:text-teal-300 transition-colors"
-                          >
-                            {ex.name}
-                          </button>
-                          {(ex.track_type || 'weight_reps') !== 'weight_reps' && (
-                            <span className="text-[10px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5 flex-shrink-0">
-                              {trackTypeShort(ex.track_type)}
-                            </span>
-                          )}
-                          <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
-                          <button
-                            onClick={() => startEdit(ex)}
-                            className="text-zinc-600 hover:text-teal-400 transition-colors p-1 rounded"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(ex.id)}
-                            className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color ? color.dot : 'bg-zinc-600'}`} />
+                        <button
+                          onClick={() => navigate(`/exercises/${encodeURIComponent(ex.name)}`)}
+                          className="text-zinc-200 text-sm flex-1 text-left hover:text-teal-300 transition-colors"
+                        >
+                          {ex.name}
+                        </button>
+                        {(ex.track_type || 'weight_reps') !== 'weight_reps' && (
+                          <span className="text-[10px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5 flex-shrink-0">
+                            {trackTypeShort(ex.track_type)}
+                          </span>
+                        )}
+                        <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
+                        <button
+                          onClick={() => startEdit(ex)}
+                          className="text-zinc-600 hover:text-teal-400 transition-colors p-1 rounded"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(ex.id)}
+                          className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -459,6 +383,16 @@ export default function Exercises() {
             );
           })}
         </div>
+      )}
+
+      {/* Exercise edit dialog */}
+      {editingId && (
+        <ExerciseEditDialog
+          exercise={exercises.find((e) => e.id === editingId)}
+          onSave={(changes) => handleSaveEdit(editingId, changes)}
+          onCancel={cancelEdit}
+          isSaving={saving}
+        />
       )}
     </div>
   );
