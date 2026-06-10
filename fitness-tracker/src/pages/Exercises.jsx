@@ -6,6 +6,8 @@ import { Plus, Trash2, Search, Dumbbell, Pencil, Check, X, ChevronRight, Sparkle
 import { CATEGORY_COLORS, CATEGORY_OPTIONS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { SEED_EXERCISES } from '../lib/seedExercises';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, trackTypeShort, defaultTrackTypeForCategory } from '../lib/trackTypes';
+import MuscleGroupPicker from '../components/MuscleGroupPicker';
+import TrackTypePicker from '../components/TrackTypePicker';
 
 const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categories: [''] }];
 
@@ -285,62 +287,16 @@ export default function Exercises() {
           </button>
         </div>
 
-        {/* Category chips — much easier to pick than a dropdown */}
+        {/* Category picker */}
         <div>
           <p className="text-xs text-zinc-500 mb-1.5">Category (optional)</p>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setNewCategory('')}
-              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                newCategory === ''
-                  ? 'bg-zinc-600 text-zinc-100 border-zinc-500'
-                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
-              }`}
-            >
-              None
-            </button>
-            {CATEGORY_OPTIONS.map((c) => {
-              const color = CATEGORY_COLORS[c.toLowerCase()];
-              const isActive = newCategory === c;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setNewCategory(c)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex items-center gap-1.5 ${
-                    isActive
-                      ? `${color?.badge || 'bg-zinc-700 text-zinc-100 border-zinc-600'}`
-                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
-                  }`}
-                >
-                  {color && <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />}
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                </button>
-              );
-            })}
-          </div>
+          <MuscleGroupPicker value={newCategory} onChange={setNewCategory} />
         </div>
 
-        {/* Track type — what you log for this exercise */}
+        {/* Track type picker */}
         <div className="mt-3">
           <p className="text-xs text-zinc-500 mb-1.5">Tracks</p>
-          <div className="flex flex-wrap gap-1.5">
-            {TRACK_TYPES.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setNewType(t.value)}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                  newType === t.value
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <TrackTypePicker value={newType} onChange={setNewType} />
         </div>
       </form>
 
