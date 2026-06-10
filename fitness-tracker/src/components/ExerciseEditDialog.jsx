@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Check, X } from 'lucide-react';
 import MuscleGroupPicker from './MuscleGroupPicker';
 import TrackTypePicker from './TrackTypePicker';
@@ -8,17 +8,9 @@ import TrackTypePicker from './TrackTypePicker';
  * Displays name input, category picker, and track type picker.
  */
 export default function ExerciseEditDialog({ exercise, onSave, onCancel, isSaving }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
-  const [trackType, setTrackType] = useState('weight_reps');
-
-  useEffect(() => {
-    if (exercise) {
-      setName(exercise.name || '');
-      setCategory(exercise.category || '');
-      setTrackType(exercise.track_type || 'weight_reps');
-    }
-  }, [exercise]);
+  const [name, setName] = useState(exercise?.name || '');
+  const [category, setCategory] = useState(exercise?.category || '');
+  const [trackType, setTrackType] = useState(exercise?.track_type || 'weight_reps');
 
   const handleSave = () => {
     if (!name.trim()) return;
