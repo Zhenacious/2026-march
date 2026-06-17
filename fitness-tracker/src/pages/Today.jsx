@@ -5,11 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
-import { TRACK_TYPES, DEFAULT_TRACK_TYPE, DISTANCE_UNITS, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues } from '../lib/trackTypes';
+import { DEFAULT_TRACK_TYPE, DISTANCE_UNITS, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues } from '../lib/trackTypes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import MuscleGroupPicker from '../components/MuscleGroupPicker';
 import ExerciseEditDialog from '../components/ExerciseEditDialog';
 
 // FILTER_TABS is just MUSCLE_GROUPS — alias so the sheet component still works
@@ -422,11 +421,9 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
 }
 
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
-function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect, onClose, onEditExercise }) {
+function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect, onCreateNew, onClose, onEditExercise }) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
-  const [newType, setNewType] = useState(DEFAULT_TRACK_TYPE);
-  const [newCategory, setNewCategory] = useState('');
   const [editingId, setEditingId] = useState(null);
   const inputRef = useRef(null);
 
@@ -524,39 +521,19 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
 
         <div className="overflow-y-auto flex-1 px-2 pb-8">
           {canCreate && (
-            <div className="rounded-xl ring-1 ring-teal-500/40 overflow-hidden">
-              <button
-                onClick={() => onSelect(search.trim(), newType, newCategory)}
-                className="w-full flex items-center gap-3 px-3 py-3 hover:bg-zinc-800 transition-colors text-left"
-              >
-                <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
-                  <Plus className="w-3.5 h-3.5 text-teal-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-zinc-100 text-sm font-medium truncate">Create &ldquo;{search.trim()}&rdquo;</p>
-                  <p className="text-zinc-500 text-xs">Add as a new exercise</p>
-                </div>
-              </button>
-              <div className="px-3 pb-3 pt-1 space-y-2.5">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1.5">Category</p>
-                  <MuscleGroupPicker value={newCategory} onChange={setNewCategory} />
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1.5">Tracks</p>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {TRACK_TYPES.map((t) => (
-                      <button key={t.value} type="button" onClick={(e) => { e.stopPropagation(); setNewType(t.value); }}
-                        className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                          newType === t.value
-                            ? 'bg-teal-600 text-white border-teal-600'
-                            : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-                        }`}>{t.label}</button>
-                    ))}
-                  </div>
-                </div>
+            <button
+              onClick={() => onCreateNew(search.trim())}
+              className="w-full flex items-center gap-3 px-3 py-3 mb-1 rounded-xl ring-1 ring-teal-500/40 hover:bg-zinc-800 transition-colors text-left"
+            >
+              <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
+                <Plus className="w-3.5 h-3.5 text-teal-400" />
               </div>
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-zinc-100 text-sm font-medium truncate">Create &ldquo;{search.trim()}&rdquo;</p>
+                <p className="text-zinc-500 text-xs">Set up in your exercise library</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+            </button>
           )}
 
           {filtered.length === 0 && !canCreate && (
@@ -896,6 +873,14 @@ export default function Today() {
     await openLog(name);
   }
 
+  // The Today picker no longer creates exercises inline — it sends you to the
+  // Exercises library page (with the typed name pre-filled) so you can set the
+  // category and track type with the full form there.
+  function handleCreateNewExercise(name) {
+    setShowSheet(false);
+    navigate(`/exercises?new=${encodeURIComponent(name)}`);
+  }
+
   async function handleEditExercise(id, changes) {
     try {
       const { error: err } = await supabase
@@ -1226,6 +1211,7 @@ export default function Today() {
             recentNames={recentNames}
             freqMap={freqMap}
             onSelect={handlePickExercise}
+            onCreateNew={handleCreateNewExercise}
             onClose={() => setShowSheet(false)}
             onEditExercise={handleEditExercise}
           />

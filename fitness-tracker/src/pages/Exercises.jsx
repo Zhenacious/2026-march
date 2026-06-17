@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Search, Dumbbell, Pencil, ChevronRight, Sparkles } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS as BASE_MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { SEED_EXERCISES } from '../lib/seedExercises';
@@ -15,6 +15,9 @@ const MUSCLE_GROUPS = [...BASE_MUSCLE_GROUPS, { label: 'Uncategorized', categori
 export default function Exercises() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const nameInputRef = useRef(null);
+  const [highlightAdd, setHighlightAdd] = useState(false);
   const [exercises, setExercises] = useState([]);
   const [search, setSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState('All');
@@ -49,6 +52,24 @@ export default function Exercises() {
   useEffect(() => {
     if (user) fetchExercises();
   }, [user]);
+
+  // When the Today picker sends us here with ?new=<name>, pre-fill the add form
+  // with that name, scroll it into view, focus it, and briefly highlight it so
+  // it's clear where to finish setting up the exercise.
+  useEffect(() => {
+    const prefill = searchParams.get('new');
+    if (!prefill) return;
+    setNewName(prefill);
+    // Clear the param so a refresh doesn't re-trigger this.
+    setSearchParams({}, { replace: true });
+    setHighlightAdd(true);
+    const focusTimer = setTimeout(() => {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    const highlightTimer = setTimeout(() => setHighlightAdd(false), 2500);
+    return () => { clearTimeout(focusTimer); clearTimeout(highlightTimer); };
+  }, [searchParams, setSearchParams]);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -255,10 +276,11 @@ export default function Exercises() {
       </div>
 
       {/* Add exercise — always visible, compact inline form */}
-      <form onSubmit={handleAdd} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+      <form onSubmit={handleAdd} className={`bg-zinc-900 border rounded-2xl p-4 mb-4 transition-colors ${highlightAdd ? 'border-teal-500 ring-2 ring-teal-500/40' : 'border-zinc-800'}`}>
         <h2 className="text-zinc-100 font-semibold text-sm mb-3">Add Exercise</h2>
         <div className="flex gap-2 mb-3">
           <input
+            ref={nameInputRef}
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
