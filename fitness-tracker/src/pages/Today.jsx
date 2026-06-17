@@ -520,22 +520,6 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
         </div>
 
         <div className="overflow-y-auto flex-1 px-2 pb-8">
-          {canCreate && (
-            <button
-              onClick={() => onCreateNew(search.trim())}
-              className="w-full flex items-center gap-3 px-3 py-3 mb-1 rounded-xl ring-1 ring-teal-500/40 hover:bg-zinc-800 transition-colors text-left"
-            >
-              <div className="w-7 h-7 rounded-full bg-teal-600/20 border border-teal-500/40 flex items-center justify-center flex-shrink-0">
-                <Plus className="w-3.5 h-3.5 text-teal-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-zinc-100 text-sm font-medium truncate">Create &ldquo;{search.trim()}&rdquo;</p>
-                <p className="text-zinc-500 text-xs">Set up in your exercise library</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0" />
-            </button>
-          )}
-
           {filtered.length === 0 && !canCreate && (
             <p className="text-zinc-600 text-sm text-center py-8">No exercises found</p>
           )}
@@ -569,6 +553,23 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
               </div>
             );
           })}
+
+          {/* Quiet fallback at the bottom — most of the time you're selecting an
+              existing exercise above, so creating a new one stays out of the way. */}
+          {canCreate && (
+            <button
+              onClick={() => onCreateNew(search.trim())}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 mt-1 rounded-xl hover:bg-zinc-800/60 transition-colors text-left"
+            >
+              <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                <Plus className="w-3.5 h-3.5 text-zinc-400" />
+              </div>
+              <span className="text-zinc-400 text-sm flex-1 truncate">
+                Add &ldquo;<span className="text-zinc-200">{search.trim()}</span>&rdquo; as new exercise
+              </span>
+              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+            </button>
+          )}
         </div>
       </div>
 
