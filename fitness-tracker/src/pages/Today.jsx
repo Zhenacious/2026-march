@@ -43,6 +43,18 @@ function setSummary(set) {
   return segs.join(' · ') || '—';
 }
 
+// Note fields save when they lose focus (onBlur). On a phone the keyboard's
+// OK/return key would otherwise just insert a blank line, so the note never
+// looks saved until you tap elsewhere. Pressing Enter here blurs the field
+// instead — firing the save and closing the keyboard. Shift+Enter still adds a
+// line break for longer notes.
+function commitOnEnter(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    e.currentTarget.blur();
+  }
+}
+
 // One labelled +/- stepper with a numeric input in the middle.
 function Stepper({ label, value, onChange, step = 1, min = 0, max }) {
   const adjust = (delta) => {
@@ -308,6 +320,7 @@ function ExerciseLogSheet({
                           <textarea
                             defaultValue={setNotes[set.id] || ''}
                             onBlur={(e) => onSaveNote(set.id, e.target.value)}
+                            onKeyDown={commitOnEnter}
                             placeholder="Add note…"
                             rows={1}
                             className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500/50 resize-none"
@@ -1109,6 +1122,7 @@ export default function Today() {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             onBlur={(e) => handleSaveNote(e.target.value)}
+            onKeyDown={commitOnEnter}
             placeholder="Session note…"
             rows={2}
             className="w-full bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 placeholder-zinc-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none"
