@@ -13,7 +13,6 @@ import CalendarView from './pages/CalendarView';
 import Import from './pages/Import';
 import ExerciseHistory from './pages/ExerciseHistory';
 import BodyWeightTracker from './pages/BodyWeightTracker';
-import FoodLog from './pages/FoodLog';
 import PersonalRecords from './pages/PersonalRecords';
 
 function ProtectedRoute({ children }) {
@@ -59,11 +58,19 @@ function WorkoutsRedirect() {
   return <Navigate to={date ? `/today?date=${date}` : '/today'} replace />;
 }
 
+// Redirect /food?date=X → /today?tab=food&date=X (food now lives on the Today page)
+function FoodRedirect() {
+  const [searchParams] = useSearchParams();
+  const date = searchParams.get('date');
+  return <Navigate to={`/today?tab=food${date ? `&date=${date}` : ''}`} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/today" replace />} />
       <Route path="/workouts" element={<WorkoutsRedirect />} />
+      <Route path="/food" element={<FoodRedirect />} />
 
       <Route
         path="/login"
@@ -89,7 +96,6 @@ export default function App() {
         <Route path="/progress" element={<Navigate to="/exercises" replace />} />
         <Route path="/import" element={<Import />} />
         <Route path="/body-weight" element={<BodyWeightTracker />} />
-        <Route path="/food" element={<FoodLog />} />
         <Route path="/records" element={<PersonalRecords />} />
       </Route>
 

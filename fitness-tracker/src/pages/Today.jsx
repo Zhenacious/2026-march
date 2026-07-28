@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import TodayFood from '../components/TodayFood';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
@@ -609,6 +610,13 @@ export default function Today() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const selectedDate = searchParams.get('date') || getTodayStr();
+  // Workout | Food tab lives in the URL so back/refresh keep your place
+  const activeTab = searchParams.get('tab') === 'food' ? 'food' : 'workout';
+  function switchTab(tab) {
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'food') next.set('tab', 'food'); else next.delete('tab');
+    setSearchParams(next, { replace: true });
+  }
   const isToday = selectedDate === getTodayStr();
   const dateObj = parseISO(selectedDate + 'T00:00:00');
   const heading = isToday ? 'Today' : format(dateObj, 'EEEE');
@@ -1078,14 +1086,30 @@ export default function Today() {
           <h1 className="text-2xl font-bold text-zinc-100 leading-tight">{heading}</h1>
           <p className="text-zinc-500 text-sm">{subheading}</p>
         </div>
-        <button onClick={() => setShowTemplates(true)} title="Workout templates"
-          className="text-zinc-500 hover:text-teal-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
-          <BookOpen className="w-5 h-5" />
-        </button>
+        {activeTab === 'workout' && (
+          <button onClick={() => setShowTemplates(true)} title="Workout templates"
+            className="text-zinc-500 hover:text-teal-400 p-2 rounded-xl hover:bg-zinc-800 transition-colors flex-shrink-0">
+            <BookOpen className="w-5 h-5" />
+          </button>
+        )}
         <button onClick={goToNextDay} disabled={isToday}
           className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 p-2 rounded-xl hover:bg-zinc-800 disabled:hover:bg-transparent transition-colors flex-shrink-0">
           <ChevronRight className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* Workout | Food tab switcher */}
+      <div className="px-4 pb-3">
+        <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+          {[['workout', 'Workout'], ['food', 'Food']].map(([key, label]) => (
+            <button key={key} onClick={() => switchTab(key)}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                activeTab === key ? 'bg-teal-600 text-white' : 'text-zinc-500 hover:text-zinc-300'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {!isToday && (
@@ -1115,6 +1139,9 @@ export default function Today() {
         </div>
       )}
 
+      {activeTab === 'food' && <TodayFood date={selectedDate} />}
+
+      {activeTab === 'workout' && (<>
       {/* Session note */}
       <div className="px-4 pb-3">
         {noteExpanded ? (
@@ -1189,6 +1216,7 @@ export default function Today() {
           </div>
         )}
       </div>
+      </>)}
 
       <AnimatePresence>
         {openExercise && (
