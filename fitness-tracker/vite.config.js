@@ -9,6 +9,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered by hand in main.jsx so the installed app can poll for new
+      // builds — the auto-injected script only checks on a cold page load,
+      // which a home-screen PWA almost never does.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'pwa-icon.svg'],
       manifest: {
         name: 'FitTrack',
