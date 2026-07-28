@@ -21,6 +21,10 @@ logging, calendar, and charts; the Dashboard is the one place both worlds merge.
 - **Dashboard is integrated**: one "this week" overview combining workout + food.
 - Extra food features: manual entry (no barcode), recent-foods quick-add strip, daily
   calorie + protein goal, visible error messages on failed saves.
+- **Editable amounts (added mid-planning by user):** when adding OR editing an entry the
+  amount can be entered as *servings* or as *grams*; the serving-size text is editable;
+  the four macro numbers themselves can be overridden manually. Gram-based math needs
+  per-100g values, so the lookup API returns them and entries store them.
 - The standalone Food Log page is removed; `/food` redirects to `/today?tab=food`.
 
 ## Screens
@@ -63,8 +67,18 @@ logging, calendar, and charts; the Dashboard is the one place both worlds merge.
 
 - `food_entries` — exists (migration_food_log.sql). Recents, calendar, trends, dashboard
   all derive from it. No favorites table (YAGNI — recents are a query).
+- **Altered** `food_entries` (new migration): add `quantity_mode text default 'servings'`
+  (`'servings'` | `'grams'`), `grams float`, `serving_grams float` (weight of one serving
+  when known), and per-100g basis columns `cal_per_100g`, `protein_per_100g`,
+  `carbs_per_100g`, `fat_per_100g` (all nullable floats). Totals rule: grams mode with
+  per-100g data → `per100g × grams/100`; otherwise → `per-serving × servings`.
+- `/api/food-lookup` response gains `serving_grams` (from OFF `serving_quantity` / USDA
+  `servingSize`) and `per_100g: {calories, protein_g, carbs_g, fat_g}` when the source
+  provides them (null otherwise).
 - **New** `user_settings`: `user_id` (pk, references auth.users), `goal_calories int`,
   `goal_protein_g int`, `updated_at`. RLS `auth.uid() = user_id`. Upsert on save.
+- Entry editing: pencil on each logged entry opens the same form used for adding —
+  meal, amount (mode + value), serving-size text, and direct macro overrides.
 - No changes to workout tables.
 
 ## Error handling
