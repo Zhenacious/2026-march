@@ -18,19 +18,26 @@ Deployed by pushing to GitHub (auto-deploy on push to `master`).
 - Exercise History — e1RM chart + session-by-session history with inline edit.
 - Calendar, Personal Records, Body Weight tracker, Dashboard, FitNotes CSV import.
 - Shared config extracted to `src/lib/categories.js` (colours + muscle groups).
+- **Food logging** — lives on the Today page behind a Workout | Food tab switcher.
+  Barcode scan (camera or typed) via `api/food-lookup.js` (Open Food Facts, USDA
+  fallback), manual entry, recent-food chips, amounts in servings/g/oz/ml,
+  editable macros, daily calorie+protein goal. Tables: `food_entries`,
+  `user_settings` (SQL in `supabase/RUN_ME_food_setup.sql`, already run).
+- **Trends page** (`/trends`) — calories/protein per day and volume/sets charts.
+- Calendar has a Workout | Food view toggle; Dashboard shows avg calories and a
+  two-signal 7-day strip (bar = trained, dot = food logged).
+- **First automated tests exist**: `scripts/test-food-math.mjs` (totals math) and
+  `scripts/test-food-lookup.mjs` (live API). Run with `node scripts/<name>.mjs`.
 
 ## In progress
-- **Food logging integration** — mid-execution, resume from
-  `docs/superpowers/plans/2026-07-29-food-integration.md` (see its
-  "EXECUTION STATUS — HANDOFF" section). Tasks 1–5 done (API, lib,
-  FoodEntryForm, TodayFood components exist but are NOT yet mounted in the
-  UI); next is Task 5b (oz/ml unit picker) then Tasks 6–10 (Today tabs,
-  calendar toggle, Trends page, Dashboard, verification).
-- USER TODO before food saving works: run `supabase/migration_food_log.sql`,
-  `migration_food_v2.sql`, `migration_food_v3.sql` in the Supabase SQL editor.
+- (nothing active — food integration finished, see below)
 
 ## Known issues / rough edges
-- No automated tests anywhere yet — changes are only verified by hand.
+- Camera barcode scanning is untested on a real phone (needs the deployed HTTPS URL).
+- `USDA_API_KEY` is not set in Vercel, so barcode lookups rely on Open Food Facts only.
+- `src/pages/Progress.jsx` is orphaned — no route renders it (`/progress` redirects
+  to `/exercises`). Safe to delete when someone's sure.
+- Test coverage is only the two food scripts; the workout side has none.
 - `CLAUDE.md` in the parent folder is partly out of date (e.g. it still calls the
   AI categorize button broken, and lists a Progress page that was merged into Exercises).
 

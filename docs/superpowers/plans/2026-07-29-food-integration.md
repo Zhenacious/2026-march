@@ -8,7 +8,29 @@
 
 **Tech Stack:** React 19, Vite, Tailwind 4, Supabase JS, Recharts, date-fns, lucide-react, html5-qrcode (existing `BarcodeScanner.jsx`), Vercel serverless (`api/`).
 
-## EXECUTION STATUS — HANDOFF (updated 2026-07-29, session switching to Opus)
+## EXECUTION STATUS — COMPLETE (2026-07-29)
+
+All tasks (1–10, plus 5b) are implemented, built, committed and pushed. The user
+ran the three migrations. Remaining follow-ups are listed at the bottom of this
+section under "Not done / follow-ups".
+
+**Verification actually run:** `npm run build` after every task (all passed);
+`scripts/test-food-lookup.mjs` against the live APIs (Nutella/Coca-Cola/Cheerios
+return per-100g + serving grams, bad barcode 404s); `scripts/test-food-math.mjs`
+(13 assertions on servings/grams/oz totals, fallbacks, recents, labels — all pass).
+Chart colours validated with the dataviz palette validator against the dark surface.
+
+**Not done / follow-ups:**
+- Nobody has clicked through the running app end-to-end (no browser session here) —
+  the user should do the manual pass in Task 10 Step 3.
+- Camera scanner still untested on a phone against the deployed HTTPS URL.
+- `USDA_API_KEY` still unset in Vercel (Open Food Facts works without it).
+- `src/pages/Progress.jsx` is now orphaned (no route points at it); `/progress`
+  redirects to `/exercises`. Left alone as out of scope.
+
+---
+
+### Original handoff notes (historical)
 
 **Done and pushed (do not redo):**
 - Task 1 — `supabase/migration_food_v2.sql` (commit 5962983)
