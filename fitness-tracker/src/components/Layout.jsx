@@ -10,6 +10,7 @@ import {
   LogOut,
   X,
   Scale,
+  Utensils,
   LayoutDashboard,
   ChevronUp,
   Trophy,
@@ -22,6 +23,7 @@ const moreNavItems = [
   { to: '/records',     label: 'Personal Records', icon: Trophy },
   { to: '/calendar',    label: 'Calendar',         icon: Calendar },
   { to: '/body-weight', label: 'Body weight',      icon: Scale },
+  { to: '/food',        label: 'Food Log',         icon: Utensils },
   { to: '/dashboard',   label: 'Stats',            icon: LayoutDashboard },
   { to: '/import',      label: 'Import / Export',  icon: Upload },
 ];

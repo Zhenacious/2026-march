@@ -13,6 +13,7 @@ import CalendarView from './pages/CalendarView';
 import Import from './pages/Import';
 import ExerciseHistory from './pages/ExerciseHistory';
 import BodyWeightTracker from './pages/BodyWeightTracker';
+import FoodLog from './pages/FoodLog';
 import PersonalRecords from './pages/PersonalRecords';
 
 function ProtectedRoute({ children }) {
@@ -88,6 +89,7 @@ export default function App() {
         <Route path="/progress" element={<Navigate to="/exercises" replace />} />
         <Route path="/import" element={<Import />} />
         <Route path="/body-weight" element={<BodyWeightTracker />} />
+        <Route path="/food" element={<FoodLog />} />
         <Route path="/records" element={<PersonalRecords />} />
       </Route>
 
