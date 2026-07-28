@@ -16,6 +16,7 @@ import {
   subMonths,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, X, ArrowRight } from 'lucide-react';
+import { dayTotals, entryTotals, amountLabel, MEAL_TYPES, MEAL_LABELS } from '../lib/food';
 
 const CATEGORY_COLORS = {
   chest:     'bg-rose-500',
@@ -42,6 +43,8 @@ export default function CalendarView() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState('workout');
+  const [foodDates, setFoodDates] = useState({});
   const [workoutDates, setWorkoutDates] = useState({});
   const [calDots, setCalDots] = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
@@ -118,9 +121,30 @@ export default function CalendarView() {
     }
   }, [user, currentDate]);
 
+  const fetchMonthFood = useCallback(async () => {
+    if (!user) return;
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const start = format(startOfWeek(monthStart, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+    const end = format(endOfWeek(monthEnd, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+
+    const { data, error: err } = await supabase
+      .from('food_entries').select('*')
+      .eq('user_id', user.id).gte('date', start).lte('date', end);
+    if (err) { setError(err.message); return; }
+
+    const map = {};
+    (data || []).forEach((e) => { (map[e.date] = map[e.date] || []).push(e); });
+    setFoodDates(map);
+  }, [user, currentDate]);
+
   useEffect(() => {
     fetchMonthWorkouts();
   }, [fetchMonthWorkouts]);
+
+  useEffect(() => {
+    if (view === 'food') fetchMonthFood();
+  }, [view, fetchMonthFood]);
 
   async function handleDayClick(day) {
     const dateStr = format(day, 'yyyy-MM-dd');
@@ -159,10 +183,24 @@ export default function CalendarView() {
     return acc;
   }, {});
 
+  const dayFood = selectedDay ? (foodDates[format(selectedDay, 'yyyy-MM-dd')] || []) : [];
+  const foodTotals = dayTotals(dayFood);
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <h1 className="text-xl font-bold text-zinc-100 mb-1">Calendar</h1>
-      <p className="text-zinc-400 text-xs mb-4">Your workout history at a glance</p>
+      <p className="text-zinc-400 text-xs mb-4">Your history at a glance</p>
+
+      <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 max-w-xs">
+        {[['workout', 'Workout'], ['food', 'Food']].map(([key, label]) => (
+          <button key={key} onClick={() => { setView(key); setSelectedDay(null); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              view === key ? 'bg-teal-600 text-white' : 'text-zinc-500 hover:text-zinc-300'
+            }`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {error && (
         <div className="bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -202,6 +240,8 @@ export default function CalendarView() {
             {calDays.map((day) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const hasWorkout = !!workoutDates[dateStr];
+              const hasFood = !!foodDates[dateStr]?.length;
+              const marked = view === 'food' ? hasFood : hasWorkout;
               const dots = calDots[dateStr] || [];
               const inMonth = isSameMonth(day, currentDate);
               const selected = selectedDay && isSameDay(day, selectedDay);
@@ -214,12 +254,12 @@ export default function CalendarView() {
                   className={`
                     aspect-square flex flex-col items-center justify-center rounded-xl text-sm transition-colors relative pb-3
                     ${!inMonth ? 'opacity-40' : ''}
-                    ${selected ? 'bg-teal-600 text-white' : hasWorkout ? 'bg-teal-950 hover:bg-teal-900 text-teal-200' : 'hover:bg-zinc-800 text-zinc-300'}
+                    ${selected ? 'bg-teal-600 text-white' : marked ? 'bg-teal-950 hover:bg-teal-900 text-teal-200' : 'hover:bg-zinc-800 text-zinc-300'}
                     ${today && !selected ? 'ring-1 ring-teal-500' : ''}
                   `}
                 >
                   <span className="text-xs font-medium">{format(day, 'd')}</span>
-                  {dots.length > 0 && !selected && (
+                  {view === 'workout' && dots.length > 0 && !selected && (
                     <div className="absolute bottom-1 flex gap-0.5 items-center">
                       {dots.slice(0, 4).map((cls, i) => (
                         <span key={i} className={`w-1 h-1 rounded-full ${cls}`} />
@@ -236,7 +276,7 @@ export default function CalendarView() {
               <span className="w-3 h-3 rounded ring-1 ring-teal-500 bg-zinc-900" />
               Today
             </div>
-            {LEGEND_ITEMS.map(({ label, color }) => (
+            {view === 'workout' && LEGEND_ITEMS.map(({ label, color }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${color}`} />
                 {label}
@@ -259,7 +299,33 @@ export default function CalendarView() {
               </button>
             </div>
 
-            {loadingDay ? (
+            {view === 'food' ? (
+              dayFood.length === 0 ? (
+                <div className="text-zinc-500 text-sm">No food logged this day.</div>
+              ) : (
+                <div className="space-y-3 overflow-y-auto flex-1">
+                  <div>
+                    <p className="text-zinc-100 text-lg font-bold leading-none">{Math.round(foodTotals.calories)} kcal</p>
+                    <p className="text-zinc-500 text-xs mt-1">
+                      P {Math.round(foodTotals.protein)} g · C {Math.round(foodTotals.carbs)} g · F {Math.round(foodTotals.fat)} g
+                    </p>
+                  </div>
+                  {MEAL_TYPES.filter((m) => dayFood.some((e) => e.meal_type === m)).map((m) => (
+                    <div key={m}>
+                      <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">{MEAL_LABELS[m]}</p>
+                      <div className="space-y-1">
+                        {dayFood.filter((e) => e.meal_type === m).map((e) => (
+                          <div key={e.id} className="text-xs text-zinc-300 bg-zinc-800 rounded-lg px-3 py-1.5">
+                            {e.food_name}
+                            <span className="text-zinc-500"> · {amountLabel(e)} · {Math.round(entryTotals(e).calories)} kcal</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : loadingDay ? (
               <div className="text-zinc-400 text-sm">Loading…</div>
             ) : !workoutDates[format(selectedDay, 'yyyy-MM-dd')] ? (
               <div className="text-zinc-500 text-sm">No workout on this day.</div>
@@ -290,10 +356,12 @@ export default function CalendarView() {
             )}
 
             <button
-              onClick={() => navigate(`/today?date=${format(selectedDay, 'yyyy-MM-dd')}`)}
+              onClick={() => navigate(view === 'food'
+                ? `/today?tab=food&date=${format(selectedDay, 'yyyy-MM-dd')}`
+                : `/today?date=${format(selectedDay, 'yyyy-MM-dd')}`)}
               className="mt-3 flex items-center justify-center gap-2 w-full bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
             >
-              Go to Workout
+              {view === 'food' ? 'Go to Food Log' : 'Go to Workout'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
