@@ -8,6 +8,63 @@
 
 **Tech Stack:** React 19, Vite, Tailwind 4, Supabase JS, Recharts, date-fns, lucide-react, html5-qrcode (existing `BarcodeScanner.jsx`), Vercel serverless (`api/`).
 
+## EXECUTION STATUS — HANDOFF (updated 2026-07-29, session switching to Opus)
+
+**Done and pushed (do not redo):**
+- Task 1 — `supabase/migration_food_v2.sql` (commit 5962983)
+- Task 2 — API per-100g + serving_grams, `scripts/test-food-lookup.mjs` verified against live APIs (commit 0d8c170)
+- Task 3 — `src/lib/food.js` (commit a185bf1)
+- Task 4 — `src/components/FoodEntryForm.jsx` (commit 89e8b16)
+- Task 5 — `src/components/TodayFood.jsx` (commit 256bb2a)
+- Units expansion (user decision mid-execution, see Task 5b): `supabase/migration_food_v3.sql` + `food.js` gained `UNIT_TO_GRAMS` and unit-aware `amountLabel` (committed with this handoff)
+
+**Remaining: Task 5b (below), then Tasks 6–10 exactly as written.**
+
+**USER ACTIONS PENDING:** run `migration_food_log.sql`, `migration_food_v2.sql`, `migration_food_v3.sql` (in that order) in the Supabase SQL editor; optionally set `USDA_API_KEY` in Vercel. Camera scanner still untested on phone.
+
+**Mid-execution decisions made with the user (supersede spec where they differ):**
+- Units: amounts can be logged as **servings, g, oz, or ml** (not just servings/grams). oz/ml convert to grams via `UNIT_TO_GRAMS` (`{ g: 1, oz: 28.35, ml: 1 }`); entry stores what the user typed in `input_amount` + `input_unit`, canonical `grams` drives the math. No cups/tbsp (unreliable for solids).
+- User's messages mentioning "Python/Flask" and "Lose It!" are template noise — the app is React + Supabase; only the units-flexibility intent was adopted.
+
+---
+
+### Task 5b: Unit picker in FoodEntryForm (servings | g | oz | ml)
+
+**Files:**
+- Modify: `fitness-tracker/src/components/FoodEntryForm.jsx`
+
+**Interfaces:**
+- Consumes: `UNIT_TO_GRAMS` from `../lib/food`.
+- Produces: `onSave` payload gains `input_unit` (`'g'|'oz'|'ml'`, default `'g'`) and `input_amount` (float|null). `quantity_mode` stays `'servings'|'grams'`.
+
+- [ ] **Step 1:** Replace the two-button mode toggle with a four-button unit row. State changes: replace `mode`/`grams` with:
+
+```jsx
+// 'servings' | 'g' | 'oz' | 'ml'
+const [unit, setUnit] = useState(
+  initial.quantity_mode === 'grams' ? (initial.input_unit || 'g') : 'servings'
+);
+const [amount, setAmount] = useState(
+  String(initial.input_amount ?? initial.grams ?? initial.serving_grams ?? 100)
+);
+```
+Import `UNIT_TO_GRAMS` from `../lib/food`. Buttons: `['servings','g','oz','ml']` labeled `Servings / g / oz / ml`; g/oz/ml disabled when `!hasPer100g` (same disabled styling/title as the old Grams button). `mode === 'servings'` checks become `unit === 'servings'`; the amount input label becomes `Amount ({unit})`, step `unit === 'oz' ? 0.1 : 1`.
+
+- [ ] **Step 2:** Preview and payload use converted grams:
+
+```jsx
+const gramsValue = unit === 'servings' ? null : (parseFloat(amount) || 0) * UNIT_TO_GRAMS[unit];
+// preview grams branch: Math.round((initial.cal_per_100g || 0) * gramsValue / 100)
+// payload: quantity_mode: unit === 'servings' ? 'servings' : 'grams',
+//          grams: gramsValue,
+//          input_unit: unit === 'servings' ? 'g' : unit,
+//          input_amount: unit === 'servings' ? null : parseFloat(amount) || 0,
+```
+
+- [ ] **Step 3:** Build passes; commit `"Add oz/ml units to food entry form"` and push.
+
+---
+
 ## Global Constraints
 
 - NO emojis anywhere in UI — lucide-react icons only.

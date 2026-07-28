@@ -4,6 +4,10 @@
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
 
+// Weight units convert to grams for the math; ml is 1:1 with g, matching how
+// label data for liquids is per 100 ml.
+export const UNIT_TO_GRAMS = { g: 1, oz: 28.35, ml: 1 };
+
 export function entryTotals(entry) {
   if (entry.quantity_mode === 'grams' && entry.grams > 0 && entry.cal_per_100g != null) {
     const f = entry.grams / 100;
@@ -52,6 +56,11 @@ export function recentFoods(entries, limit = 8) {
 }
 
 export function amountLabel(entry) {
-  if (entry.quantity_mode === 'grams' && entry.grams > 0) return `${entry.grams} g`;
+  if (entry.quantity_mode === 'grams' && entry.grams > 0) {
+    if (entry.input_amount > 0 && entry.input_unit && entry.input_unit !== 'g') {
+      return `${entry.input_amount} ${entry.input_unit}`;
+    }
+    return `${Math.round(entry.grams * 10) / 10} g`;
+  }
   return `${entry.servings || 1} × ${entry.serving_size || 'serving'}`;
 }
