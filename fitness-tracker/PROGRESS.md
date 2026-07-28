@@ -4,7 +4,7 @@
 > and update it at the END of a session so next time picks up where this one left off.
 > Keep it short. If a section gets long, trim the oldest stuff.
 
-_Last updated: 2026-06-17_
+_Last updated: 2026-07-29_
 
 ## What this app is
 A personal React + Supabase fitness tracker. Log gym sessions (exercises, sets,
@@ -20,7 +20,14 @@ Deployed by pushing to GitHub (auto-deploy on push to `master`).
 - Shared config extracted to `src/lib/categories.js` (colours + muscle groups).
 
 ## In progress
-- (nothing active right now)
+- **Food logging integration** — mid-execution, resume from
+  `docs/superpowers/plans/2026-07-29-food-integration.md` (see its
+  "EXECUTION STATUS — HANDOFF" section). Tasks 1–5 done (API, lib,
+  FoodEntryForm, TodayFood components exist but are NOT yet mounted in the
+  UI); next is Task 5b (oz/ml unit picker) then Tasks 6–10 (Today tabs,
+  calendar toggle, Trends page, Dashboard, verification).
+- USER TODO before food saving works: run `supabase/migration_food_log.sql`,
+  `migration_food_v2.sql`, `migration_food_v3.sql` in the Supabase SQL editor.
 
 ## Known issues / rough edges
 - No automated tests anywhere yet — changes are only verified by hand.
