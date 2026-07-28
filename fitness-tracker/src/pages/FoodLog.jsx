@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Utensils, Search, Plus, Trash2, X } from 'lucide-react';
+import { Utensils, Search, Plus, Trash2, X, ScanBarcode } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
@@ -20,6 +21,7 @@ export default function FoodLog() {
   const [found, setFound] = useState(null); // { barcode, name, brand, serving_size, calories, protein_g, carbs_g, fat_g }
   const [mealType, setMealType] = useState('breakfast');
   const [servings, setServings] = useState('1');
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -161,6 +163,24 @@ export default function FoodLog() {
       {/* Add food */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-6">
         <h2 className="text-zinc-100 font-semibold mb-4">Add Food</h2>
+        <button
+          onClick={() => { setLookupError(''); setScanning((s) => !s); }}
+          className="flex items-center justify-center gap-2 w-full bg-teal-600 hover:bg-teal-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors mb-4"
+        >
+          <ScanBarcode className="w-4 h-4" />
+          {scanning ? 'Stop scanning' : 'Scan barcode'}
+        </button>
+        {scanning && (
+          <BarcodeScanner
+            onScan={(code) => {
+              // Unmount the scanner first so the same barcode can't fire twice
+              setScanning(false);
+              setManualBarcode(code);
+              handleLookup(code);
+            }}
+            onClose={() => setScanning(false)}
+          />
+        )}
         <div className="flex gap-3 flex-wrap items-end">
           <div className="flex flex-col gap-1 flex-1 min-w-40">
             <label className="text-zinc-400 text-xs">Barcode</label>
