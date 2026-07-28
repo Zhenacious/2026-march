@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { MEAL_TYPES, MEAL_LABELS } from '../lib/food';
+import { MEAL_TYPES, MEAL_LABELS, UNIT_TO_GRAMS } from '../lib/food';
 
 /**
  * Shared add/edit form for a food entry. Amount can be entered as servings of
@@ -9,9 +9,14 @@ import { MEAL_TYPES, MEAL_LABELS } from '../lib/food';
  */
 export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabel = 'Save' }) {
   const [mealType, setMealType] = useState(initial.meal_type || 'breakfast');
-  const [mode, setMode] = useState(initial.quantity_mode || 'servings');
+  // 'servings' | 'g' | 'oz' | 'ml'
+  const [unit, setUnit] = useState(
+    initial.quantity_mode === 'grams' ? (initial.input_unit || 'g') : 'servings'
+  );
   const [servings, setServings] = useState(String(initial.servings ?? 1));
-  const [grams, setGrams] = useState(String(initial.grams ?? initial.serving_grams ?? 100));
+  const [amount, setAmount] = useState(
+    String(initial.input_amount ?? initial.grams ?? initial.serving_grams ?? 100)
+  );
   const [servingSize, setServingSize] = useState(initial.serving_size || '');
   const [name, setName] = useState(initial.food_name || '');
   const [cal, setCal] = useState(String(initial.calories ?? 0));
@@ -23,10 +28,12 @@ export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabe
 
   const hasPer100g = initial.cal_per_100g != null;
 
+  // Every unit except servings converts to grams, which is what the math uses.
+  const gramsValue = unit === 'servings' ? null : (parseFloat(amount) || 0) * UNIT_TO_GRAMS[unit];
+
   const preview = (() => {
-    if (mode === 'grams' && hasPer100g) {
-      const f = (parseFloat(grams) || 0) / 100;
-      return Math.round((initial.cal_per_100g || 0) * f);
+    if (unit !== 'servings' && hasPer100g) {
+      return Math.round(((initial.cal_per_100g || 0) * gramsValue) / 100);
     }
     return Math.round((parseFloat(cal) || 0) * (parseFloat(servings) || 1));
   })();
@@ -40,9 +47,11 @@ export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabe
         food_name: name.trim(),
         barcode: initial.barcode || '',
         meal_type: mealType,
-        quantity_mode: mode,
+        quantity_mode: unit === 'servings' ? 'servings' : 'grams',
         servings: parseFloat(servings) || 1,
-        grams: mode === 'grams' ? parseFloat(grams) || 0 : null,
+        grams: gramsValue,
+        input_unit: unit === 'servings' ? 'g' : unit,
+        input_amount: unit === 'servings' ? null : parseFloat(amount) || 0,
         serving_size: servingSize,
         serving_grams: initial.serving_grams ?? null,
         calories: parseFloat(cal) || 0,
@@ -81,24 +90,23 @@ export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabe
         ))}
       </div>
 
-      {/* Amount: servings vs grams */}
+      {/* Amount: servings, or a weight/volume unit (needs per-100g label data) */}
       <div>
-        <div className="flex gap-2 mb-2">
-          <button onClick={() => setMode('servings')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              mode === 'servings' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/60 text-zinc-500 hover:text-zinc-300'
-            }`}>
-            Servings
-          </button>
-          <button onClick={() => hasPer100g && setMode('grams')} disabled={!hasPer100g}
-            title={hasPer100g ? '' : 'No per-100g data for this food'}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
-              mode === 'grams' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/60 text-zinc-500 hover:text-zinc-300'
-            }`}>
-            Grams
-          </button>
+        <div className="flex gap-2 mb-2 flex-wrap">
+          {[['servings', 'Servings'], ['g', 'g'], ['oz', 'oz'], ['ml', 'ml']].map(([key, label]) => {
+            const disabled = key !== 'servings' && !hasPer100g;
+            return (
+              <button key={key} onClick={() => !disabled && setUnit(key)} disabled={disabled}
+                title={disabled ? 'No per-100g data for this food' : ''}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+                  unit === key ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/60 text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {label}
+              </button>
+            );
+          })}
         </div>
-        {mode === 'servings' ? (
+        {unit === 'servings' ? (
           <div className="flex gap-3 items-end flex-wrap">
             <div className="flex flex-col gap-1">
               <label className="text-zinc-400 text-xs">Servings</label>
@@ -113,9 +121,12 @@ export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabe
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <label className="text-zinc-400 text-xs">Amount (g)</label>
-            <input type="number" step="1" min="0" value={grams}
-              onChange={(e) => setGrams(e.target.value)} className={`${inputCls} w-28`} />
+            <label className="text-zinc-400 text-xs">Amount ({unit})</label>
+            <input type="number" step={unit === 'oz' ? '0.1' : '1'} min="0" value={amount}
+              onChange={(e) => setAmount(e.target.value)} className={`${inputCls} w-28`} />
+            {unit === 'oz' && gramsValue > 0 && (
+              <p className="text-zinc-600 text-[10px]">= {Math.round(gramsValue * 10) / 10} g</p>
+            )}
           </div>
         )}
       </div>
@@ -123,9 +134,9 @@ export default function FoodEntryForm({ initial = {}, onSave, onCancel, saveLabe
       {/* Macro values (per one serving; fixed per-100g label data in grams mode) */}
       <div>
         <p className="text-zinc-400 text-xs mb-2">
-          Nutrition per {mode === 'grams' ? '100 g (from label data)' : `serving${servingSize ? ` (${servingSize})` : ''}`}
+          Nutrition per {unit !== 'servings' ? '100 g (from label data)' : `serving${servingSize ? ` (${servingSize})` : ''}`}
         </p>
-        {mode === 'grams' ? (
+        {unit !== 'servings' ? (
           <p className="text-zinc-500 text-xs">
             {initial.cal_per_100g ?? 0} kcal · P {initial.protein_per_100g ?? 0} g · C {initial.carbs_per_100g ?? 0} g · F {initial.fat_per_100g ?? 0} g
           </p>
