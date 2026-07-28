@@ -4,7 +4,7 @@
 // of the returned serving_size.
 
 async function lookupOFF(barcode) {
-  const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,serving_size,nutriments`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}.json?fields=product_name,brands,serving_size,serving_quantity,nutriments`;
   const resp = await fetch(url);
   if (!resp.ok) return null;
   const json = await resp.json();
@@ -31,11 +31,26 @@ async function lookupOFF(barcode) {
     servingSize = '100 g';
   }
 
+  // Per-100g basis + serving weight so the app can log amounts by grams
+  const r1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
+  const kcal100 = n['energy-kcal_100g'] != null
+    ? n['energy-kcal_100g']
+    : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
+  const per100g = kcal100 == null ? null : {
+    calories: r1(kcal100),
+    protein_g: r1(n['proteins_100g']) ?? 0,
+    carbs_g: r1(n['carbohydrates_100g']) ?? 0,
+    fat_g: r1(n['fat_100g']) ?? 0,
+  };
+  const servingGrams = product.serving_quantity > 0 ? Number(product.serving_quantity) : null;
+
   return {
     source: 'openfoodfacts',
     name: product.product_name || 'Unknown product',
     brand: product.brands || '',
     serving_size: servingSize,
+    serving_grams: servingGrams,
+    per_100g: per100g,
     calories: Math.round((calories || 0) * 10) / 10,
     protein_g: Math.round((protein || 0) * 10) / 10,
     carbs_g: Math.round((carbs || 0) * 10) / 10,
@@ -68,6 +83,15 @@ async function lookupUSDA(barcode) {
   let carbs = byNumber['205'] || 0;
   let fat = byNumber['204'] || 0;
 
+  // Branded values are per 100 g/mL natively — capture that basis before scaling
+  const per100g = {
+    calories: Math.round(calories * 10) / 10,
+    protein_g: Math.round(protein * 10) / 10,
+    carbs_g: Math.round(carbs * 10) / 10,
+    fat_g: Math.round(fat * 10) / 10,
+  };
+  let servingGrams = null;
+
   let servingSize = '100 g';
   const unit = (food.servingSizeUnit || '').toLowerCase();
   if ((unit === 'g' || unit === 'ml') && food.servingSize > 0) {
@@ -77,6 +101,7 @@ async function lookupUSDA(barcode) {
     carbs *= scale;
     fat *= scale;
     servingSize = `${food.servingSize} ${unit}`;
+    servingGrams = food.servingSize;
   }
 
   return {
@@ -84,6 +109,8 @@ async function lookupUSDA(barcode) {
     name: food.description || 'Unknown product',
     brand: food.brandOwner || '',
     serving_size: servingSize,
+    serving_grams: servingGrams,
+    per_100g: per100g,
     calories: Math.round(calories * 10) / 10,
     protein_g: Math.round(protein * 10) / 10,
     carbs_g: Math.round(carbs * 10) / 10,
