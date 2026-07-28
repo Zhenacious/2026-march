@@ -10,6 +10,7 @@ import {
   LogOut,
   X,
   Scale,
+  BarChart3,
   LayoutDashboard,
   ChevronUp,
   Trophy,
@@ -20,6 +21,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 const moreNavItems = [
   { to: '/exercises',   label: 'Exercises',        icon: Library },
   { to: '/records',     label: 'Personal Records', icon: Trophy },
+  { to: '/trends',      label: 'Trends',           icon: BarChart3 },
   { to: '/calendar',    label: 'Calendar',         icon: Calendar },
   { to: '/body-weight', label: 'Body weight',      icon: Scale },
   { to: '/dashboard',   label: 'Stats',            icon: LayoutDashboard },

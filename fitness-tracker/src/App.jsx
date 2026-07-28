@@ -14,6 +14,7 @@ import Import from './pages/Import';
 import ExerciseHistory from './pages/ExerciseHistory';
 import BodyWeightTracker from './pages/BodyWeightTracker';
 import PersonalRecords from './pages/PersonalRecords';
+import Trends from './pages/Trends';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="/import" element={<Import />} />
         <Route path="/body-weight" element={<BodyWeightTracker />} />
         <Route path="/records" element={<PersonalRecords />} />
+        <Route path="/trends" element={<Trends />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/today" replace />} />
