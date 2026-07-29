@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { STARTER_FOODS, STARTER_FOOD_COUNT } from '../lib/starterFoods';
 import { friendlyDbError } from '../lib/foodEntries';
+import AlphaList from '../components/AlphaList';
 
 const BLANK = {
   name: '', brand: '', barcode: '', serving_size: '1 serving', serving_grams: '',
@@ -238,8 +239,12 @@ export default function MyFoods() {
           </p>
         </div>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800 overflow-hidden">
-          {filtered.map((f) => (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <AlphaList
+            className="max-h-[70vh]"
+            items={filtered}
+            getName={(f) => f.name}
+            renderRow={(f) => (
             editing?.id === f.id ? (
               <div key={f.id} className="p-5">
                 <FoodForm
@@ -280,7 +285,8 @@ export default function MyFoods() {
                 </div>
               </div>
             )
-          ))}
+          )}
+          />
         </div>
       )}
     </div>
