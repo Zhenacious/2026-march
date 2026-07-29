@@ -7,7 +7,7 @@ import { entryTotals, dayTotals, recentFoods, amountLabel, MEAL_TYPES, MEAL_LABE
 import BarcodeScanner from './BarcodeScanner';
 import AddFoodModal from './AddFoodModal';
 import FoodPanel from './FoodPanel';
-import { insertFoodEntry, updateFoodEntry, deleteFoodEntry, toPanelFood } from '../lib/foodEntries';
+import { insertFoodEntry, updateFoodEntry, deleteFoodEntry, toPanelFood, friendlyDbError } from '../lib/foodEntries';
 
 export default function TodayFood({ date }) {
   const { user } = useAuth();
@@ -42,7 +42,7 @@ export default function TodayFood({ date }) {
         .from('food_entries').select('*')
         .eq('user_id', user.id).eq('date', date).order('created_at');
       if (!cancelled) {
-        if (err) setError(`Could not load food: ${err.message}`);
+        if (err) setError(friendlyDbError(err, 'your food log'));
         else setEntries(data || []);
         setLoading(false);
       }
@@ -169,7 +169,7 @@ export default function TodayFood({ date }) {
       fat_per_100g: f.per_100g?.fat_g ?? null,
     };
     const { data, error: err } = await supabase.from('custom_foods').insert(row).select().single();
-    if (err) { setError(`Could not save to your foods: ${err.message}`); return; }
+    if (err) { setError(friendlyDbError(err, 'your saved foods')); return; }
     setMyFoods((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
     setSavedIds((prev) => [...prev, key]);
   }

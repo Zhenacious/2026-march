@@ -3,6 +3,7 @@ import { Library, Plus, Pencil, Trash2, Search, Check, X, Download } from 'lucid
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { STARTER_FOODS, STARTER_FOOD_COUNT } from '../lib/starterFoods';
+import { friendlyDbError } from '../lib/foodEntries';
 
 const BLANK = {
   name: '', brand: '', barcode: '', serving_size: '1 serving', serving_grams: '',
@@ -118,7 +119,7 @@ export default function MyFoods() {
         .from('custom_foods').select('*')
         .eq('user_id', user.id).order('name');
       if (cancelled) return;
-      if (err) setError(`Could not load your foods: ${err.message}`);
+      if (err) setError(friendlyDbError(err, 'your saved foods'));
       else setFoods(data || []);
       setLoading(false);
     })();
@@ -170,7 +171,7 @@ export default function MyFoods() {
       }
       setFoods((prev) => [...prev, ...added].sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
-      setError(`Could not load starter foods: ${err.message}`);
+      setError(friendlyDbError(err, 'your saved foods'));
     } finally {
       setSeeding(false);
     }

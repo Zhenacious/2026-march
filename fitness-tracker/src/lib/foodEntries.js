@@ -1,6 +1,19 @@
 import { supabase } from './supabase';
 
 /**
+ * Turns "could not find the table 'public.x' in the schema cache" into
+ * something actionable — it means the setup SQL hasn't been run yet, which is
+ * a setup step rather than a bug in the app.
+ */
+export function friendlyDbError(err, what = 'this') {
+  const msg = err?.message || String(err);
+  if (/schema cache|does not exist|relation .* does not exist/i.test(msg)) {
+    return `The database table for ${what} hasn't been created yet. Run supabase/RUN_ME_food_setup.sql in the Supabase SQL editor, then reload.`;
+  }
+  return msg;
+}
+
+/**
  * Saving a food entry. Nutrition is copied onto the entry at log time rather
  * than looked up later, so correcting a food never rewrites days you already
  * logged.
