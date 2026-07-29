@@ -1,6 +1,13 @@
 # Visual-companion / brainstorming server artifacts
 .superpowers/
 
+# API credentials kept as loose notes — must never reach the public repo
+Fat Secret.txt
+*secret*.txt
+*credentials*.txt
+.env
+.env.local
+
 # Facebook scraper — session cookies, output files, and node packages
 facebook-scraper/fb_session.json
 facebook-scraper/comments_*.csv
