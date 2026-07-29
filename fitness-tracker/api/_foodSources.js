@@ -30,8 +30,18 @@ function offToStandard(product, barcode) {
     : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
   if (n['energy-kcal_serving'] == null && kcal100raw == null) return null;
 
+  // Pure fat is 900 kcal/100g, so anything above that is a bad record — usually
+  // kilojoules entered in the kcal field, or a per-kilo figure.
+  if (kcal100raw != null && kcal100raw > 900) return null;
+
+  // Some records set "serving" to the whole package (a 900 g cereal box), which
+  // is arithmetically right but a terrible default to log. Above half a kilo,
+  // fall back to per-100g and let the amount be entered by weight instead.
+  const servingQty = product.serving_quantity > 0 ? Number(product.serving_quantity) : null;
+  const servingIsSane = servingQty == null || servingQty <= 500;
+
   let calories, protein, carbs, fat, servingSize;
-  if (n['energy-kcal_serving'] != null) {
+  if (n['energy-kcal_serving'] != null && servingIsSane) {
     calories = n['energy-kcal_serving'];
     protein = n['proteins_serving'];
     carbs = n['carbohydrates_serving'];
@@ -60,7 +70,7 @@ function offToStandard(product, barcode) {
     name: product.product_name || 'Unknown product',
     brand: Array.isArray(product.brands) ? product.brands.join(', ') : (product.brands || ''),
     serving_size: servingSize,
-    serving_grams: product.serving_quantity > 0 ? Number(product.serving_quantity) : null,
+    serving_grams: servingIsSane ? servingQty : null,
     per_100g: per100g,
     calories: r1(calories || 0),
     protein_g: r1(protein || 0),
