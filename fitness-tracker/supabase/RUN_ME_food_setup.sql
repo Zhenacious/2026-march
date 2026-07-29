@@ -58,6 +58,8 @@ create table if not exists custom_foods (
   fat_per_100g float,
   created_at timestamptz default now()
 );
+-- alternative names (Chinese name, pinyin, regional English), comma-separated
+alter table custom_foods add column if not exists aliases text default '';
 alter table custom_foods enable row level security;
 drop policy if exists "Users manage own custom foods" on custom_foods;
 create policy "Users manage own custom foods" on custom_foods for all using (auth.uid() = user_id);

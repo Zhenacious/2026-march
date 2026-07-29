@@ -126,10 +126,16 @@ export default function TodayFood({ date }) {
         return;
       }
 
-      // Your own foods first — instant, and never rate-limited
+      // Your own foods first — instant, never rate-limited, and matched on
+      // alternative names too so 老干妈 or "chilli crisp" find the same food.
+      // Commas and parens are stripped because PostgREST parses them as filter
+      // syntax inside .or().
+      const safe = q.replace(/[,()]/g, ' ').trim();
       const { data: mine } = await supabase
         .from('custom_foods').select('*')
-        .eq('user_id', user.id).ilike('name', `%${q}%`).limit(10);
+        .eq('user_id', user.id)
+        .or(`name.ilike.%${safe}%,aliases.ilike.%${safe}%`)
+        .limit(10);
 
       const resp = await fetch(`/api/food-search?q=${encodeURIComponent(q)}`);
       const json = await resp.json().catch(() => ({}));
@@ -156,6 +162,7 @@ export default function TodayFood({ date }) {
       user_id: user.id,
       name: f.name,
       brand: String(f.brand || ''),
+      aliases: f.aliases || '',
       barcode: f.barcode || '',
       serving_size: f.serving_size || '',
       serving_grams: f.serving_grams ?? null,

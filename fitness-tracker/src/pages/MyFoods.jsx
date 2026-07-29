@@ -7,7 +7,7 @@ import { friendlyDbError } from '../lib/foodEntries';
 import AlphaList from '../components/AlphaList';
 
 const BLANK = {
-  name: '', brand: '', barcode: '', serving_size: '1 serving', serving_grams: '',
+  name: '', brand: '', aliases: '', barcode: '', serving_size: '1 serving', serving_grams: '',
   calories: '', protein_g: '', carbs_g: '', fat_g: '',
 };
 
@@ -36,6 +36,7 @@ function FoodForm({ initial, onSave, onCancel }) {
       await onSave({
         name: String(v.name).trim(),
         brand: String(v.brand || '').trim(),
+        aliases: String(v.aliases || '').trim(),
         barcode: String(v.barcode || '').trim(),
         serving_size: String(v.serving_size || '').trim(),
         serving_grams: grams > 0 ? grams : null,
@@ -62,6 +63,13 @@ function FoodForm({ initial, onSave, onCancel }) {
         <div className="flex flex-col gap-1">
           <label className="text-zinc-400 text-xs">Brand (optional)</label>
           <input className={inputCls} value={v.brand} onChange={(e) => set('brand', e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <label className="text-zinc-400 text-xs">
+            Also known as <span className="text-zinc-600">— other names to find it by, separated by commas</span>
+          </label>
+          <input className={inputCls} placeholder="e.g. 老干妈, laoganma, chilli crisp"
+            value={v.aliases} onChange={(e) => set('aliases', e.target.value)} />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-zinc-400 text-xs">Serving description</label>
@@ -131,7 +139,9 @@ export default function MyFoods() {
     const q = search.trim().toLowerCase();
     if (!q) return foods;
     return foods.filter((f) =>
-      f.name.toLowerCase().includes(q) || (f.brand || '').toLowerCase().includes(q));
+      f.name.toLowerCase().includes(q)
+      || (f.brand || '').toLowerCase().includes(q)
+      || (f.aliases || '').toLowerCase().includes(q));
   }, [foods, search]);
 
   async function addFood(values) {
@@ -272,6 +282,9 @@ export default function MyFoods() {
                     {f.serving_grams ? ` (${f.serving_grams} g)` : ''}
                     {' · '}P {Math.round(f.protein_g)} · C {Math.round(f.carbs_g)} · F {Math.round(f.fat_g)}
                   </p>
+                  {f.aliases && (
+                    <p className="text-zinc-600 text-[11px] truncate">{f.aliases}</p>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0 ml-2">
                   <button onClick={() => { setEditing(f); setAdding(false); }}
