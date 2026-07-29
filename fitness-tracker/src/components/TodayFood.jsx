@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ScanBarcode, Search, Pencil, Trash2, Target, Utensils, PlusCircle, Check, BookmarkPlus, Library } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { entryTotals, dayTotals, recentFoods, amountLabel, MEAL_TYPES, MEAL_LABELS } from '../lib/food';
-import FoodEntryForm from './FoodEntryForm';
 import BarcodeScanner from './BarcodeScanner';
+import FoodPanelDrawer, { useIsWide } from './FoodPanelDrawer';
+import { insertFoodEntry, updateFoodEntry, deleteFoodEntry, toPanelFood } from '../lib/foodEntries';
 
 /** Strips DB row keys that must not be reused when re-logging a recent food. */
 function asFormInitial(row) {
@@ -15,6 +16,8 @@ function asFormInitial(row) {
 
 export default function TodayFood({ date }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const isWide = useIsWide();
   const [entries, setEntries] = useState([]);
   const [allRecent, setAllRecent] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,8 +33,7 @@ export default function TodayFood({ date }) {
   const [results, setResults] = useState(null); // null = no search run yet
   const [savedIds, setSavedIds] = useState([]);
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [pendingFood, setPendingFood] = useState(null); // FoodEntryForm initial for a new entry
-  const [editingEntry, setEditingEntry] = useState(null); // existing row being edited
+  const [panel, setPanel] = useState(null); // { food, entryId } while the drawer is open
 
   useEffect(() => {
     if (!user) return;
@@ -91,22 +93,14 @@ export default function TodayFood({ date }) {
     setEditingGoal(false);
   }
 
-  /** Maps an API/library result into the shape FoodEntryForm expects. */
-  function toFormInitial(f) {
-    return {
-      food_name: f.brand ? `${f.name} (${String(f.brand).split(',')[0].trim()})` : f.name,
-      barcode: f.barcode || '',
-      serving_size: f.serving_size,
-      serving_grams: f.serving_grams,
-      calories: f.calories,
-      protein_g: f.protein_g,
-      carbs_g: f.carbs_g,
-      fat_g: f.fat_g,
-      cal_per_100g: f.per_100g?.calories ?? f.cal_per_100g ?? null,
-      protein_per_100g: f.per_100g?.protein_g ?? f.protein_per_100g ?? null,
-      carbs_per_100g: f.per_100g?.carbs_g ?? f.carbs_per_100g ?? null,
-      fat_per_100g: f.per_100g?.fat_g ?? f.fat_per_100g ?? null,
-    };
+  /**
+   * Opens the add/edit surface: a slide-over drawer on wide screens, a
+   * full-screen route on phones where a drawer would be cramped.
+   */
+  function openPanel(food, entryId = null) {
+    setResults(null);
+    if (isWide) setPanel({ food, entryId });
+    else navigate('/food/add', { state: { food, entryId, date } });
   }
 
   /** One box for both: digits are treated as a barcode, anything else as a name. */
@@ -126,7 +120,7 @@ export default function TodayFood({ date }) {
             : json.error || 'Lookup failed.');
           return;
         }
-        setPendingFood(toFormInitial({ ...json, barcode: q }));
+        openPanel(toPanelFood({ ...json, barcode: q }));
         return;
       }
 
@@ -176,30 +170,36 @@ export default function TodayFood({ date }) {
     setSavedIds((prev) => [...prev, key]);
   }
 
-  async function insertEntry(values) {
-    const { data, error: err } = await supabase
-      .from('food_entries')
-      .insert({ ...values, user_id: user.id, date })
-      .select().single();
-    if (err) throw new Error(err.message);
-    setEntries((prev) => [...prev, data]);
-    setAllRecent((prev) => [data, ...prev]);
-    setPendingFood(null);
-    setBarcode('');
+  async function savePanel(values) {
+    if (panel?.entryId) {
+      const data = await updateFoodEntry(panel.entryId, values);
+      setEntries((prev) => prev.map((e) => (e.id === panel.entryId ? data : e)));
+    } else {
+      const data = await insertFoodEntry(user.id, date, values);
+      setEntries((prev) => [...prev, data]);
+      setAllRecent((prev) => [data, ...prev]);
+      setBarcode('');
+    }
+    setPanel(null);
   }
 
-  async function updateEntry(id, values) {
-    const { data, error: err } = await supabase
-      .from('food_entries').update(values).eq('id', id).select().single();
-    if (err) throw new Error(err.message);
-    setEntries((prev) => prev.map((e) => (e.id === id ? data : e)));
-    setEditingEntry(null);
+  async function deleteFromPanel() {
+    try {
+      await deleteFoodEntry(panel.entryId);
+      setEntries((prev) => prev.filter((e) => e.id !== panel.entryId));
+      setPanel(null);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function deleteEntry(id) {
-    const { error: err } = await supabase.from('food_entries').delete().eq('id', id);
-    if (err) { setError(`Could not delete: ${err.message}`); return; }
-    setEntries((prev) => prev.filter((e) => e.id !== id));
+    try {
+      await deleteFoodEntry(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+    } catch (err) {
+      setError(`Could not delete: ${err.message}`);
+    }
   }
 
   const goalPct = settings?.goal_calories
@@ -297,7 +297,7 @@ export default function TodayFood({ date }) {
               const key = `${f.source}-${f.id || f.barcode || i}`;
               return (
                 <div key={key} className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors">
-                  <button onClick={() => { setPendingFood(toFormInitial(f)); setResults(null); }}
+                  <button onClick={() => openPanel(toPanelFood(f))}
                     className="flex-1 min-w-0 text-left">
                     <p className="text-zinc-100 text-sm font-medium truncate">
                       {f.name}
@@ -330,7 +330,7 @@ export default function TodayFood({ date }) {
             <p className="text-zinc-500 text-xs mb-2">Recent foods</p>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {recents.map((r) => (
-                <button key={r.id} onClick={() => setPendingFood(asFormInitial(r))}
+                <button key={r.id} onClick={() => openPanel(asFormInitial(r))}
                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full px-3 py-1.5 text-xs whitespace-nowrap transition-colors">
                   {r.food_name}
                 </button>
@@ -339,7 +339,7 @@ export default function TodayFood({ date }) {
           </div>
         )}
         <div className="flex items-center gap-4 mt-4 flex-wrap">
-          <button onClick={() => setPendingFood({ food_name: '', serving_size: '1 serving' })}
+          <button onClick={() => openPanel({ food_name: '', serving_size: '1 serving' })}
             className="flex items-center gap-1.5 text-teal-400 hover:text-teal-300 text-xs transition-colors">
             <PlusCircle className="w-3.5 h-3.5" />
             Can't find it? Add manually
@@ -351,18 +351,6 @@ export default function TodayFood({ date }) {
           </Link>
         </div>
       </div>
-
-      {/* New-entry form */}
-      {pendingFood && (
-        <div className="bg-zinc-900 border border-teal-800/50 rounded-2xl p-5">
-          <FoodEntryForm
-            initial={pendingFood}
-            saveLabel="Add to log"
-            onSave={insertEntry}
-            onCancel={() => setPendingFood(null)}
-          />
-        </div>
-      )}
 
       {/* Meals */}
       {loading ? (
@@ -382,42 +370,42 @@ export default function TodayFood({ date }) {
               </p>
             </div>
             <div className="divide-y divide-zinc-800">
-              {byMeal[meal].map((entry) =>
-                editingEntry?.id === entry.id ? (
-                  <div key={entry.id} className="px-5 py-4">
-                    <FoodEntryForm
-                      initial={editingEntry}
-                      saveLabel="Save changes"
-                      onSave={(v) => updateEntry(entry.id, v)}
-                      onCancel={() => setEditingEntry(null)}
-                    />
+              {byMeal[meal].map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between px-5 py-3">
+                  {/* Tapping an entry reopens the same panel, pre-filled */}
+                  <button onClick={() => openPanel(entry, entry.id)} className="min-w-0 text-left flex-1">
+                    <p className="text-zinc-100 text-sm font-medium truncate">{entry.food_name}</p>
+                    <p className="text-zinc-500 text-xs">
+                      {amountLabel(entry)} · {Math.round(entryTotals(entry).calories)} kcal
+                      · P {Math.round(entryTotals(entry).protein)} · C {Math.round(entryTotals(entry).carbs)} · F {Math.round(entryTotals(entry).fat)}
+                    </p>
+                  </button>
+                  <div className="flex gap-1 shrink-0 ml-2">
+                    <button onClick={() => openPanel(entry, entry.id)} aria-label="Edit entry"
+                      className="text-zinc-600 hover:text-teal-400 p-1.5 rounded transition-colors">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteEntry(entry.id)} aria-label="Delete entry"
+                      className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                ) : (
-                  <div key={entry.id} className="flex items-center justify-between px-5 py-3">
-                    <div className="min-w-0">
-                      <p className="text-zinc-100 text-sm font-medium truncate">{entry.food_name}</p>
-                      <p className="text-zinc-500 text-xs">
-                        {amountLabel(entry)} · {Math.round(entryTotals(entry).calories)} kcal
-                        · P {Math.round(entryTotals(entry).protein)} · C {Math.round(entryTotals(entry).carbs)} · F {Math.round(entryTotals(entry).fat)}
-                      </p>
-                    </div>
-                    <div className="flex gap-1 shrink-0 ml-2">
-                      <button onClick={() => setEditingEntry(entry)}
-                        className="text-zinc-600 hover:text-teal-400 p-1.5 rounded transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => deleteEntry(entry.id)}
-                        className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
+                </div>
+              ))}
             </div>
           </div>
         ))
       )}
+
+      <FoodPanelDrawer
+        open={!!panel}
+        title={panel?.entryId ? 'Edit entry' : 'Add food'}
+        initial={panel?.food || {}}
+        saveLabel={panel?.entryId ? 'Save changes' : 'Add to log'}
+        onSave={savePanel}
+        onCancel={() => setPanel(null)}
+        onDelete={panel?.entryId ? deleteFromPanel : null}
+      />
     </div>
   );
 }
