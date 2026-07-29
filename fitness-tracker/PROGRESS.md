@@ -23,6 +23,12 @@ Deployed by pushing to GitHub (auto-deploy on push to `master`).
   fallback), manual entry, recent-food chips, amounts in servings/g/oz/ml,
   editable macros, daily calorie+protein goal. Tables: `food_entries`,
   `user_settings` (SQL in `supabase/RUN_ME_food_setup.sql`, already run).
+- **Food search + My Foods** — one box takes a name or a barcode. Names search your
+  own `custom_foods` library first, then Open Food Facts + FatSecret. `/foods` page
+  adds/edits/deletes your own foods; search results have a bookmark button to save
+  into it. Note: OFF throttles search (~10/min) and its legacy `cgi/search.pl`
+  endpoint 503s, so search uses `search.openfoodfacts.org` for codes then fetches
+  each product — this is why the personal library matters.
 - **Trends page** (`/trends`) — calories/protein per day and volume/sets charts.
 - Calendar has a Workout | Food view toggle; Dashboard shows avg calories and a
   two-signal 7-day strip (bar = trained, dot = food logged).
@@ -34,7 +40,12 @@ Deployed by pushing to GitHub (auto-deploy on push to `master`).
 
 ## Known issues / rough edges
 - Camera barcode scanning is untested on a real phone (needs the deployed HTTPS URL).
-- `USDA_API_KEY` is not set in Vercel, so barcode lookups rely on Open Food Facts only.
+- `USDA_API_KEY` and `FATSECRET_CLIENT_ID`/`FATSECRET_CLIENT_SECRET` are not set in
+  Vercel, so lookups currently use Open Food Facts only. FatSecret may also need IP
+  allowlisting in its dashboard, which is awkward on serverless — verify before
+  relying on it.
+- Chinese product coverage is genuinely thin in every free database; the My Foods
+  library is the practical answer there.
 - `src/pages/Progress.jsx` is orphaned — no route renders it (`/progress` redirects
   to `/exercises`). Safe to delete when someone's sure.
 - Test coverage is only the two food scripts; the workout side has none.
