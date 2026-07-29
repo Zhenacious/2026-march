@@ -15,8 +15,20 @@ const num = (v) => (v == null || v === '' ? null : parseFloat(v));
 
 const OFF_FIELDS = 'code,product_name,brands,serving_size,serving_quantity,nutriments';
 
+/**
+ * Returns null when the record carries no energy value at all. Open Food Facts
+ * is crowd-sourced and plenty of products exist as a name and barcode with the
+ * nutrition panel never filled in — reporting those as "0 kcal" would quietly
+ * log nothing. A genuinely zero-calorie food still records energy as 0, so an
+ * absent value is missing data rather than a real zero.
+ */
 function offToStandard(product, barcode) {
   const n = product.nutriments || {};
+
+  const kcal100raw = n['energy-kcal_100g'] != null
+    ? n['energy-kcal_100g']
+    : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
+  if (n['energy-kcal_serving'] == null && kcal100raw == null) return null;
 
   let calories, protein, carbs, fat, servingSize;
   if (n['energy-kcal_serving'] != null) {
@@ -35,11 +47,8 @@ function offToStandard(product, barcode) {
     servingSize = '100 g';
   }
 
-  const kcal100 = n['energy-kcal_100g'] != null
-    ? n['energy-kcal_100g']
-    : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
-  const per100g = kcal100 == null ? null : {
-    calories: r1(kcal100),
+  const per100g = kcal100raw == null ? null : {
+    calories: r1(kcal100raw),
     protein_g: r1(n['proteins_100g']) ?? 0,
     carbs_g: r1(n['carbohydrates_100g']) ?? 0,
     fat_g: r1(n['fat_100g']) ?? 0,
