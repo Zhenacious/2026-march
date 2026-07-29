@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ScanBarcode, Search, Pencil, Trash2, Target, Utensils, PlusCircle, Check } from 'lucide-react';
+import { ScanBarcode, Search, Pencil, Trash2, Target, Utensils, PlusCircle, Check, BookmarkPlus, Library } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { entryTotals, dayTotals, recentFoods, amountLabel, MEAL_TYPES, MEAL_LABELS } from '../lib/food';
@@ -26,6 +27,8 @@ export default function TodayFood({ date }) {
 
   const [scanning, setScanning] = useState(false);
   const [barcode, setBarcode] = useState('');
+  const [results, setResults] = useState(null); // null = no search run yet
+  const [savedIds, setSavedIds] = useState([]);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [pendingFood, setPendingFood] = useState(null); // FoodEntryForm initial for a new entry
   const [editingEntry, setEditingEntry] = useState(null); // existing row being edited
@@ -88,39 +91,89 @@ export default function TodayFood({ date }) {
     setEditingGoal(false);
   }
 
-  async function handleLookup(code) {
-    const c = code.trim();
-    if (!c) return;
+  /** Maps an API/library result into the shape FoodEntryForm expects. */
+  function toFormInitial(f) {
+    return {
+      food_name: f.brand ? `${f.name} (${String(f.brand).split(',')[0].trim()})` : f.name,
+      barcode: f.barcode || '',
+      serving_size: f.serving_size,
+      serving_grams: f.serving_grams,
+      calories: f.calories,
+      protein_g: f.protein_g,
+      carbs_g: f.carbs_g,
+      fat_g: f.fat_g,
+      cal_per_100g: f.per_100g?.calories ?? f.cal_per_100g ?? null,
+      protein_per_100g: f.per_100g?.protein_g ?? f.protein_per_100g ?? null,
+      carbs_per_100g: f.per_100g?.carbs_g ?? f.carbs_per_100g ?? null,
+      fat_per_100g: f.per_100g?.fat_g ?? f.fat_per_100g ?? null,
+    };
+  }
+
+  /** One box for both: digits are treated as a barcode, anything else as a name. */
+  async function handleSearch(input) {
+    const q = String(input).trim();
+    if (!q) return;
     setError('');
+    setResults(null);
     setLookupLoading(true);
     try {
-      const resp = await fetch(`/api/food-lookup?barcode=${encodeURIComponent(c)}`);
-      const json = await resp.json();
-      if (!resp.ok) {
-        setError(resp.status === 404
-          ? 'Product not found — check the barcode or add it manually.'
-          : json.error || 'Lookup failed.');
+      if (/^\d{8,14}$/.test(q)) {
+        const resp = await fetch(`/api/food-lookup?barcode=${encodeURIComponent(q)}`);
+        const json = await resp.json();
+        if (!resp.ok) {
+          setError(resp.status === 404
+            ? 'Barcode not found in any database — try searching by name, or add it manually.'
+            : json.error || 'Lookup failed.');
+          return;
+        }
+        setPendingFood(toFormInitial({ ...json, barcode: q }));
         return;
       }
-      setPendingFood({
-        food_name: json.brand ? `${json.name} (${json.brand.split(',')[0].trim()})` : json.name,
-        barcode: c,
-        serving_size: json.serving_size,
-        serving_grams: json.serving_grams,
-        calories: json.calories,
-        protein_g: json.protein_g,
-        carbs_g: json.carbs_g,
-        fat_g: json.fat_g,
-        cal_per_100g: json.per_100g?.calories ?? null,
-        protein_per_100g: json.per_100g?.protein_g ?? null,
-        carbs_per_100g: json.per_100g?.carbs_g ?? null,
-        fat_per_100g: json.per_100g?.fat_g ?? null,
-      });
+
+      // Your own library first — instant, and never rate-limited
+      const { data: mine } = await supabase
+        .from('custom_foods').select('*')
+        .eq('user_id', user.id).ilike('name', `%${q}%`).limit(10);
+
+      const resp = await fetch(`/api/food-search?q=${encodeURIComponent(q)}`);
+      const json = await resp.json().catch(() => ({}));
+      const external = resp.ok ? (json.results || []) : [];
+
+      const combined = [
+        ...(mine || []).map((f) => ({ ...f, source: 'mine' })),
+        ...external,
+      ];
+      setResults(combined);
+      if (combined.length === 0) {
+        setError(`No matches for "${q}". The food databases are thin in some regions — add it manually and it will be saved for next time.`);
+      }
     } catch {
-      setError('Lookup failed. Check your connection.');
+      setError('Search failed. Check your connection.');
     } finally {
       setLookupLoading(false);
     }
+  }
+
+  /** Keeps a found food in your own library so it is searchable instantly later. */
+  async function saveToLibrary(f, key) {
+    const { error: err } = await supabase.from('custom_foods').insert({
+      user_id: user.id,
+      name: f.name,
+      brand: String(f.brand || ''),
+      barcode: f.barcode || '',
+      serving_size: f.serving_size || '',
+      serving_grams: f.serving_grams ?? null,
+      calories: f.calories || 0,
+      protein_g: f.protein_g || 0,
+      carbs_g: f.carbs_g || 0,
+      fat_g: f.fat_g || 0,
+      cal_per_100g: f.per_100g?.calories ?? null,
+      protein_per_100g: f.per_100g?.protein_g ?? null,
+      carbs_per_100g: f.per_100g?.carbs_g ?? null,
+      fat_per_100g: f.per_100g?.fat_g ?? null,
+    });
+    if (err) { setError(`Could not save to your foods: ${err.message}`); return; }
+    setSavedIds((prev) => [...prev, key]);
   }
 
   async function insertEntry(values) {
@@ -219,24 +272,59 @@ export default function TodayFood({ date }) {
         </button>
         {scanning && (
           <BarcodeScanner
-            onScan={(code) => { setScanning(false); setBarcode(code); handleLookup(code); }}
+            onScan={(code) => { setScanning(false); setBarcode(code); handleSearch(code); }}
             onClose={() => setScanning(false)}
           />
         )}
         <div className="flex gap-3 flex-wrap items-end">
           <div className="flex flex-col gap-1 flex-1 min-w-40">
-            <label className="text-zinc-400 text-xs">Barcode</label>
-            <input type="text" inputMode="numeric" placeholder="e.g. 5449000000996" value={barcode}
-              onChange={(e) => setBarcode(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleLookup(barcode); }}
+            <label className="text-zinc-400 text-xs">Search a food or barcode</label>
+            <input type="text" placeholder="e.g. tim tam, or 5449000000996" value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(barcode); }}
               className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
-          <button onClick={() => handleLookup(barcode)} disabled={lookupLoading || !barcode}
+          <button onClick={() => handleSearch(barcode)} disabled={lookupLoading || !barcode}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <Search className="w-4 h-4" />
             {lookupLoading ? 'Searching…' : 'Search'}
           </button>
         </div>
+
+        {results && results.length > 0 && (
+          <div className="mt-4 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden">
+            {results.map((f, i) => {
+              const key = `${f.source}-${f.id || f.barcode || i}`;
+              return (
+                <div key={key} className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors">
+                  <button onClick={() => { setPendingFood(toFormInitial(f)); setResults(null); }}
+                    className="flex-1 min-w-0 text-left">
+                    <p className="text-zinc-100 text-sm font-medium truncate">
+                      {f.name}
+                      {f.source === 'mine' && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-teal-400 font-semibold">My foods</span>
+                      )}
+                    </p>
+                    <p className="text-zinc-500 text-xs truncate">
+                      {f.brand ? `${String(f.brand).split(',')[0].trim()} · ` : ''}
+                      {Math.round(f.calories)} kcal / {f.serving_size || 'serving'}
+                    </p>
+                  </button>
+                  {f.source !== 'mine' && (
+                    <button
+                      onClick={() => saveToLibrary(f, key)}
+                      disabled={savedIds.includes(key)}
+                      title="Save to my foods"
+                      className="text-zinc-600 hover:text-teal-400 disabled:text-teal-500 p-1.5 rounded transition-colors shrink-0"
+                    >
+                      {savedIds.includes(key) ? <Check className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {recents.length > 0 && (
           <div className="mt-4">
             <p className="text-zinc-500 text-xs mb-2">Recent foods</p>
@@ -250,11 +338,18 @@ export default function TodayFood({ date }) {
             </div>
           </div>
         )}
-        <button onClick={() => setPendingFood({ food_name: '', serving_size: '1 serving' })}
-          className="flex items-center gap-1.5 text-teal-400 hover:text-teal-300 text-xs mt-4 transition-colors">
-          <PlusCircle className="w-3.5 h-3.5" />
-          Can't scan it? Add manually
-        </button>
+        <div className="flex items-center gap-4 mt-4 flex-wrap">
+          <button onClick={() => setPendingFood({ food_name: '', serving_size: '1 serving' })}
+            className="flex items-center gap-1.5 text-teal-400 hover:text-teal-300 text-xs transition-colors">
+            <PlusCircle className="w-3.5 h-3.5" />
+            Can't find it? Add manually
+          </button>
+          <Link to="/foods"
+            className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
+            <Library className="w-3.5 h-3.5" />
+            My foods
+          </Link>
+        </div>
       </div>
 
       {/* New-entry form */}
