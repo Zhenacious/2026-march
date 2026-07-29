@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Library, Plus, Pencil, Trash2, Search, Check, X } from 'lucide-react';
+import { Library, Plus, Pencil, Trash2, Search, Check, X, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { STARTER_FOODS, STARTER_FOOD_COUNT } from '../lib/starterFoods';
 
 const BLANK = {
   name: '', brand: '', barcode: '', serving_size: '1 serving', serving_grams: '',
@@ -106,6 +107,7 @@ export default function MyFoods() {
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -147,6 +149,33 @@ export default function MyFoods() {
     setEditing(null);
   }
 
+  /** Fills an empty library with common foods so browsing is useful from day one. */
+  async function loadStarterFoods() {
+    setSeeding(true);
+    setError('');
+    try {
+      const have = new Set(foods.map((f) => f.name.toLowerCase()));
+      const toAdd = STARTER_FOODS
+        .filter((f) => !have.has(f.name.toLowerCase()))
+        .map((f) => ({ ...f, user_id: user.id, barcode: '' }));
+      if (toAdd.length === 0) { setSeeding(false); return; }
+
+      // Chunked so one oversized request can't fail the whole import
+      const added = [];
+      for (let i = 0; i < toAdd.length; i += 100) {
+        const { data, error: err } = await supabase
+          .from('custom_foods').insert(toAdd.slice(i, i + 100)).select();
+        if (err) throw new Error(err.message);
+        added.push(...(data || []));
+      }
+      setFoods((prev) => [...prev, ...added].sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      setError(`Could not load starter foods: ${err.message}`);
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   async function deleteFood(id) {
     const { error: err } = await supabase.from('custom_foods').delete().eq('id', id);
     if (err) { setError(`Could not delete: ${err.message}`); return; }
@@ -181,6 +210,12 @@ export default function MyFoods() {
         <button onClick={() => { setAdding(true); setEditing(null); }}
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus className="w-4 h-4" /> Add food
+        </button>
+        <button onClick={loadStarterFoods} disabled={seeding}
+          title={`Adds ${STARTER_FOOD_COUNT} common foods, skipping any you already have`}
+          className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          <Download className="w-4 h-4" />
+          {seeding ? 'Loading…' : 'Load starter foods'}
         </button>
       </div>
 

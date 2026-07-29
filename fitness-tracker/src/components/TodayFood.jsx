@@ -1,25 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ScanBarcode, Search, Pencil, Trash2, Target, Utensils, PlusCircle, Check, BookmarkPlus, Library } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { ScanBarcode, Plus, Pencil, Trash2, Target, Utensils, Check, BookmarkPlus, Library } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { entryTotals, dayTotals, recentFoods, amountLabel, MEAL_TYPES, MEAL_LABELS } from '../lib/food';
 import BarcodeScanner from './BarcodeScanner';
-import FoodPanelDrawer, { useIsWide } from './FoodPanelDrawer';
+import AddFoodModal from './AddFoodModal';
+import FoodPanel from './FoodPanel';
 import { insertFoodEntry, updateFoodEntry, deleteFoodEntry, toPanelFood } from '../lib/foodEntries';
-
-/** Strips DB row keys that must not be reused when re-logging a recent food. */
-function asFormInitial(row) {
-  const { id, created_at, user_id, date, ...rest } = row;
-  return rest;
-}
 
 export default function TodayFood({ date }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const isWide = useIsWide();
   const [entries, setEntries] = useState([]);
   const [allRecent, setAllRecent] = useState([]);
+  const [myFoods, setMyFoods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,11 +23,15 @@ export default function TodayFood({ date }) {
   const [goalProtein, setGoalProtein] = useState('');
 
   const [scanning, setScanning] = useState(false);
-  const [barcode, setBarcode] = useState('');
-  const [results, setResults] = useState(null); // null = no search run yet
+  const [modalOpen, setModalOpen] = useState(false);
+  const [initialDetail, setInitialDetail] = useState(null);
+
+  // Search lives here so its results survive closing and reopening the modal
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(null);
+  const [searchError, setSearchError] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
   const [savedIds, setSavedIds] = useState([]);
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [panel, setPanel] = useState(null); // { food, entryId } while the drawer is open
 
   useEffect(() => {
     if (!user) return;
@@ -55,10 +53,15 @@ export default function TodayFood({ date }) {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      const { data: recent } = await supabase
         .from('food_entries').select('*')
-        .eq('user_id', user.id).order('created_at', { ascending: false }).limit(100);
-      setAllRecent(data || []);
+        .eq('user_id', user.id).order('created_at', { ascending: false }).limit(200);
+      setAllRecent(recent || []);
+
+      const { data: mine } = await supabase
+        .from('custom_foods').select('*').eq('user_id', user.id).order('name');
+      setMyFoods(mine || []);
+
       const { data: s } = await supabase
         .from('user_settings').select('*').eq('user_id', user.id).maybeSingle();
       if (s) {
@@ -70,7 +73,6 @@ export default function TodayFood({ date }) {
   }, [user]);
 
   const totals = useMemo(() => dayTotals(entries), [entries]);
-  const recents = useMemo(() => recentFoods(allRecent), [allRecent]);
   const byMeal = useMemo(() => {
     const g = {};
     for (const m of MEAL_TYPES) {
@@ -79,6 +81,16 @@ export default function TodayFood({ date }) {
     }
     return g;
   }, [entries]);
+
+  /** Distinct foods logged before, newest first — the "Previous" tab. */
+  const previousFoods = useMemo(
+    () => recentFoods(allRecent, 40).map((e) => ({
+      ...e,
+      name: e.food_name,
+      brand: '',
+    })),
+    [allRecent]
+  );
 
   async function saveGoal() {
     const payload = {
@@ -93,38 +105,28 @@ export default function TodayFood({ date }) {
     setEditingGoal(false);
   }
 
-  /**
-   * Opens the add/edit surface: a slide-over drawer on wide screens, a
-   * full-screen route on phones where a drawer would be cramped.
-   */
-  function openPanel(food, entryId = null) {
-    setResults(null);
-    if (isWide) setPanel({ food, entryId });
-    else navigate('/food/add', { state: { food, entryId, date } });
-  }
-
   /** One box for both: digits are treated as a barcode, anything else as a name. */
-  async function handleSearch(input) {
+  async function runSearch(input) {
     const q = String(input).trim();
     if (!q) return;
-    setError('');
+    setSearchError('');
     setResults(null);
-    setLookupLoading(true);
+    setSearchLoading(true);
     try {
       if (/^\d{8,14}$/.test(q)) {
         const resp = await fetch(`/api/food-lookup?barcode=${encodeURIComponent(q)}`);
         const json = await resp.json();
         if (!resp.ok) {
-          setError(resp.status === 404
-            ? 'Barcode not found in any database — try searching by name, or add it manually.'
+          setSearchError(resp.status === 404
+            ? 'Barcode not found in any database — try the name, or use Create.'
             : json.error || 'Lookup failed.');
           return;
         }
-        openPanel(toPanelFood({ ...json, barcode: q }));
+        setResults([{ ...json, barcode: q }]);
         return;
       }
 
-      // Your own library first — instant, and never rate-limited
+      // Your own foods first — instant, and never rate-limited
       const { data: mine } = await supabase
         .from('custom_foods').select('*')
         .eq('user_id', user.id).ilike('name', `%${q}%`).limit(10);
@@ -139,18 +141,18 @@ export default function TodayFood({ date }) {
       ];
       setResults(combined);
       if (combined.length === 0) {
-        setError(`No matches for "${q}". The food databases are thin in some regions — add it manually and it will be saved for next time.`);
+        setSearchError(`No matches for "${q}". Use Create to add it yourself — it'll be saved for next time.`);
       }
     } catch {
-      setError('Search failed. Check your connection.');
+      setSearchError('Search failed. Check your connection.');
     } finally {
-      setLookupLoading(false);
+      setSearchLoading(false);
     }
   }
 
   /** Keeps a found food in your own library so it is searchable instantly later. */
   async function saveToLibrary(f, key) {
-    const { error: err } = await supabase.from('custom_foods').insert({
+    const row = {
       user_id: user.id,
       name: f.name,
       brand: String(f.brand || ''),
@@ -165,42 +167,56 @@ export default function TodayFood({ date }) {
       protein_per_100g: f.per_100g?.protein_g ?? null,
       carbs_per_100g: f.per_100g?.carbs_g ?? null,
       fat_per_100g: f.per_100g?.fat_g ?? null,
-    });
+    };
+    const { data, error: err } = await supabase.from('custom_foods').insert(row).select().single();
     if (err) { setError(`Could not save to your foods: ${err.message}`); return; }
+    setMyFoods((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
     setSavedIds((prev) => [...prev, key]);
   }
 
-  async function savePanel(values) {
-    if (panel?.entryId) {
-      const data = await updateFoodEntry(panel.entryId, values);
-      setEntries((prev) => prev.map((e) => (e.id === panel.entryId ? data : e)));
+  async function savePanel(values, entryId) {
+    if (entryId) {
+      const data = await updateFoodEntry(entryId, values);
+      setEntries((prev) => prev.map((e) => (e.id === entryId ? data : e)));
     } else {
       const data = await insertFoodEntry(user.id, date, values);
       setEntries((prev) => [...prev, data]);
       setAllRecent((prev) => [data, ...prev]);
-      setBarcode('');
     }
-    setPanel(null);
+    closeModal();
   }
 
-  async function deleteFromPanel() {
-    try {
-      await deleteFoodEntry(panel.entryId);
-      setEntries((prev) => prev.filter((e) => e.id !== panel.entryId));
-      setPanel(null);
-    } catch (err) {
-      setError(err.message);
-    }
+  /** Create tab: log the food and keep it in the library in one go. */
+  async function createAndLog(values) {
+    await savePanel(values, null);
+    const { data } = await supabase.from('custom_foods').insert({
+      user_id: user.id,
+      name: values.food_name,
+      brand: '',
+      barcode: values.barcode || '',
+      serving_size: values.serving_size || '',
+      serving_grams: values.serving_grams ?? null,
+      calories: values.calories, protein_g: values.protein_g,
+      carbs_g: values.carbs_g, fat_g: values.fat_g,
+      cal_per_100g: values.cal_per_100g, protein_per_100g: values.protein_per_100g,
+      carbs_per_100g: values.carbs_per_100g, fat_per_100g: values.fat_per_100g,
+    }).select().single();
+    if (data) setMyFoods((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
-  async function deleteEntry(id) {
+  async function removeEntry(id) {
     try {
       await deleteFoodEntry(id);
       setEntries((prev) => prev.filter((e) => e.id !== id));
+      closeModal();
     } catch (err) {
       setError(`Could not delete: ${err.message}`);
     }
   }
+
+  function openAdd() { setInitialDetail(null); setModalOpen(true); }
+  function openEdit(entry) { setInitialDetail({ food: entry, entryId: entry.id }); setModalOpen(true); }
+  function closeModal() { setModalOpen(false); setInitialDetail(null); }
 
   const goalPct = settings?.goal_calories
     ? Math.min(100, (totals.calories / settings.goal_calories) * 100)
@@ -214,7 +230,7 @@ export default function TodayFood({ date }) {
         </div>
       )}
 
-      {/* Goal card */}
+      {/* Goal + day totals */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
         {editingGoal ? (
           <div className="flex gap-3 items-end flex-wrap">
@@ -263,94 +279,33 @@ export default function TodayFood({ date }) {
         )}
       </div>
 
-      {/* Add food */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-        <button onClick={() => { setError(''); setScanning((s) => !s); }}
-          className="flex items-center justify-center gap-2 w-full bg-teal-600 hover:bg-teal-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors mb-4">
-          <ScanBarcode className="w-4 h-4" />
-          {scanning ? 'Stop scanning' : 'Scan barcode'}
+      {/* Add */}
+      <div className="flex gap-2">
+        <button onClick={openAdd}
+          className="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-colors">
+          <Plus className="w-4 h-4" /> Add Food
         </button>
-        {scanning && (
-          <BarcodeScanner
-            onScan={(code) => { setScanning(false); setBarcode(code); handleSearch(code); }}
-            onClose={() => setScanning(false)}
-          />
-        )}
-        <div className="flex gap-3 flex-wrap items-end">
-          <div className="flex flex-col gap-1 flex-1 min-w-40">
-            <label className="text-zinc-400 text-xs">Search a food or barcode</label>
-            <input type="text" placeholder="e.g. tim tam, or 5449000000996" value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(barcode); }}
-              className="bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
-          </div>
-          <button onClick={() => handleSearch(barcode)} disabled={lookupLoading || !barcode}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <Search className="w-4 h-4" />
-            {lookupLoading ? 'Searching…' : 'Search'}
-          </button>
-        </div>
-
-        {results && results.length > 0 && (
-          <div className="mt-4 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden">
-            {results.map((f, i) => {
-              const key = `${f.source}-${f.id || f.barcode || i}`;
-              return (
-                <div key={key} className="flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/50 transition-colors">
-                  <button onClick={() => openPanel(toPanelFood(f))}
-                    className="flex-1 min-w-0 text-left">
-                    <p className="text-zinc-100 text-sm font-medium truncate">
-                      {f.name}
-                      {f.source === 'mine' && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-teal-400 font-semibold">My foods</span>
-                      )}
-                    </p>
-                    <p className="text-zinc-500 text-xs truncate">
-                      {f.brand ? `${String(f.brand).split(',')[0].trim()} · ` : ''}
-                      {Math.round(f.calories)} kcal / {f.serving_size || 'serving'}
-                    </p>
-                  </button>
-                  {f.source !== 'mine' && (
-                    <button
-                      onClick={() => saveToLibrary(f, key)}
-                      disabled={savedIds.includes(key)}
-                      title="Save to my foods"
-                      className="text-zinc-600 hover:text-teal-400 disabled:text-teal-500 p-1.5 rounded transition-colors shrink-0"
-                    >
-                      {savedIds.includes(key) ? <Check className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {recents.length > 0 && (
-          <div className="mt-4">
-            <p className="text-zinc-500 text-xs mb-2">Recent foods</p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {recents.map((r) => (
-                <button key={r.id} onClick={() => openPanel(asFormInitial(r))}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full px-3 py-1.5 text-xs whitespace-nowrap transition-colors">
-                  {r.food_name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-4 mt-4 flex-wrap">
-          <button onClick={() => openPanel({ food_name: '', serving_size: '1 serving' })}
-            className="flex items-center gap-1.5 text-teal-400 hover:text-teal-300 text-xs transition-colors">
-            <PlusCircle className="w-3.5 h-3.5" />
-            Can't find it? Add manually
-          </button>
-          <Link to="/foods"
-            className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
-            <Library className="w-3.5 h-3.5" />
-            My foods
-          </Link>
-        </div>
+        <button onClick={() => { setError(''); setScanning((s) => !s); }} aria-label="Scan barcode"
+          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-3 rounded-xl transition-colors">
+          <ScanBarcode className="w-5 h-5" />
+        </button>
       </div>
+
+      {scanning && (
+        <BarcodeScanner
+          onScan={(code) => {
+            setScanning(false);
+            setQuery(code);
+            setModalOpen(true);
+            runSearch(code);
+          }}
+          onClose={() => setScanning(false)}
+        />
+      )}
+
+      <Link to="/foods" className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs transition-colors -mt-1">
+        <Library className="w-3.5 h-3.5" /> Manage my foods
+      </Link>
 
       {/* Meals */}
       {loading ? (
@@ -358,7 +313,7 @@ export default function TodayFood({ date }) {
       ) : entries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-2">
           <Utensils className="w-8 h-8 opacity-40" />
-          <p className="text-sm">No foods logged. Scan a barcode or add manually.</p>
+          <p className="text-sm">No foods logged yet.</p>
         </div>
       ) : (
         MEAL_TYPES.filter((m) => byMeal[m]).map((meal) => (
@@ -372,8 +327,8 @@ export default function TodayFood({ date }) {
             <div className="divide-y divide-zinc-800">
               {byMeal[meal].map((entry) => (
                 <div key={entry.id} className="flex items-center justify-between px-5 py-3">
-                  {/* Tapping an entry reopens the same panel, pre-filled */}
-                  <button onClick={() => openPanel(entry, entry.id)} className="min-w-0 text-left flex-1">
+                  {/* Tapping an entry reopens the same modal on its detail step */}
+                  <button onClick={() => openEdit(entry)} className="min-w-0 text-left flex-1">
                     <p className="text-zinc-100 text-sm font-medium truncate">{entry.food_name}</p>
                     <p className="text-zinc-500 text-xs">
                       {amountLabel(entry)} · {Math.round(entryTotals(entry).calories)} kcal
@@ -381,11 +336,11 @@ export default function TodayFood({ date }) {
                     </p>
                   </button>
                   <div className="flex gap-1 shrink-0 ml-2">
-                    <button onClick={() => openPanel(entry, entry.id)} aria-label="Edit entry"
+                    <button onClick={() => openEdit(entry)} aria-label="Edit entry"
                       className="text-zinc-600 hover:text-teal-400 p-1.5 rounded transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button onClick={() => deleteEntry(entry.id)} aria-label="Delete entry"
+                    <button onClick={() => removeEntry(entry.id)} aria-label="Delete entry"
                       className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -397,14 +352,37 @@ export default function TodayFood({ date }) {
         ))
       )}
 
-      <FoodPanelDrawer
-        open={!!panel}
-        title={panel?.entryId ? 'Edit entry' : 'Add food'}
-        initial={panel?.food || {}}
-        saveLabel={panel?.entryId ? 'Save changes' : 'Add to log'}
+      <AddFoodModal
+        open={modalOpen}
+        onClose={closeModal}
         onSave={savePanel}
-        onCancel={() => setPanel(null)}
-        onDelete={panel?.entryId ? deleteFromPanel : null}
+        onDelete={removeEntry}
+        initialDetail={initialDetail}
+        myFoods={myFoods}
+        previousFoods={previousFoods}
+        searchState={{
+          query, setQuery, run: runSearch,
+          loading: searchLoading, error: searchError, results,
+          rowAction: (f, i) => {
+            if (f.source === 'mine' || !f.name) return null;
+            const key = `${f.source}-${f.barcode || i}`;
+            return (
+              <button onClick={() => saveToLibrary(f, key)} disabled={savedIds.includes(key)}
+                title="Save to my foods"
+                className="text-zinc-600 hover:text-teal-400 disabled:text-teal-500 p-1.5 rounded transition-colors shrink-0">
+                {savedIds.includes(key) ? <Check className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
+              </button>
+            );
+          },
+        }}
+        createForm={
+          <FoodPanel
+            initial={{ food_name: '', serving_size: '1 serving' }}
+            saveLabel="Create and log"
+            onSave={createAndLog}
+            onCancel={closeModal}
+          />
+        }
       />
     </div>
   );
