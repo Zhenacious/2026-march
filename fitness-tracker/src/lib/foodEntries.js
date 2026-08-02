@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 export function friendlyDbError(err, what = 'this') {
   const msg = err?.message || String(err);
   if (/schema cache|does not exist|relation .* does not exist/i.test(msg)) {
-    return `The database table for ${what} hasn't been created yet. Run supabase/RUN_ME_food_setup.sql in the Supabase SQL editor, then reload.`;
+    return `The database table for ${what} hasn't been created yet. Run "npm run migrate" to bring the database up to date, then reload.`;
   }
   return msg;
 }

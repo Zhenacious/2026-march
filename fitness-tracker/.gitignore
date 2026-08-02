@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Secrets — never commit these. .env holds the database connection string and
+# API keys; .env.example is the safe, value-free template that IS committed.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
