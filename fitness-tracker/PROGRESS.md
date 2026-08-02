@@ -78,7 +78,9 @@ so they pick up their Chinese names (rows saved before the column existed have n
 ## Database
 `workouts`, `workout_sets`, `exercises` (workout side) plus `food_entries`,
 `custom_foods`, `user_settings` (food side). All SQL lives in
-`supabase/RUN_ME_food_setup.sql` — one idempotent file, safe to re-run.
+`supabase/migrations/`, applied with `npm run migrate` — never by pasting into
+the Supabase dashboard. See `supabase/README.md` for the setup and the rules for
+adding a migration.
 Nutrition is **snapshotted onto each log entry**, so editing a food never rewrites
 past days. That was a deliberate choice (confirmed with the user), not an accident.
 
