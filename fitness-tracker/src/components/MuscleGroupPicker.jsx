@@ -1,5 +1,5 @@
 import React from 'react';
-import { CATEGORY_COLORS, CATEGORY_OPTIONS } from '../lib/categories';
+import { CATEGORY_COLORS, CATEGORY_OPTIONS, categoryLabel } from '../lib/categories';
 
 /**
  * Reusable muscle group category picker shown as clickable chips.
@@ -35,7 +35,7 @@ export default function MuscleGroupPicker({ value, onChange }) {
             }`}
           >
             {color && <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />}
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            {categoryLabel(cat)}
           </button>
         );
       })}

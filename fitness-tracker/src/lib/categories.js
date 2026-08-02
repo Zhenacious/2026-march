@@ -10,6 +10,7 @@ export const CATEGORY_COLORS = {
   biceps:    { dot: 'bg-violet-500', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/40', label: 'Biceps' },
   shoulders: { dot: 'bg-sky-500',    badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40',         label: 'Shoulders' },
   mobility:  { dot: 'bg-teal-500',   badge: 'bg-teal-500/20 text-teal-300 border-teal-500/40',     label: 'Mobility' },
+  full_body: { dot: 'bg-white',      badge: 'bg-white/20 text-white border-white/40',             label: 'Full Body' },
 };
 
 export const MUSCLE_GROUPS = [
@@ -21,14 +22,29 @@ export const MUSCLE_GROUPS = [
   { label: 'Shoulders', categories: ['shoulders'] },
   { label: 'Abs',       categories: ['abs'] },
   { label: 'Mobility',  categories: ['mobility'] },
+  { label: 'Full Body', categories: ['full_body'] },
 ];
 
-export const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
+export const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility', 'full_body'];
 
-// Matches a raw category string (any case/whitespace) against the canonical
+// The display name for a category key — 'full_body' reads as 'Full Body' rather
+// than the raw key, which is why callers should never capitalize keys themselves.
+export function categoryLabel(category) {
+  return CATEGORY_COLORS[category]?.label
+    || (category ? category.charAt(0).toUpperCase() + category.slice(1) : '');
+}
+
+// Keys stripped to letters and digits, so a category written any reasonable way
+// still finds its canonical form: 'Full Body', 'full-body' and 'fullbody' all
+// resolve to 'full_body'.
+const CANONICAL_BY_SQUASHED = Object.fromEntries(
+  CATEGORY_OPTIONS.map((c) => [c.replace(/[^a-z0-9]/g, ''), c])
+);
+
+// Matches a raw category string (any case/spacing) against the canonical
 // CATEGORY_OPTIONS list. Anything that doesn't match collapses to '' (uncategorized) —
 // this is what stops "Abs" and "abs" forming two separate groups on the Exercises page.
 export function normalizeCategory(category) {
-  const lower = (category || '').trim().toLowerCase();
-  return CATEGORY_OPTIONS.includes(lower) ? lower : '';
+  const squashed = (category || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return CANONICAL_BY_SQUASHED[squashed] || '';
 }

@@ -8,7 +8,7 @@ import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { CATEGORY_COLORS } from '../lib/categories';
+import { CATEGORY_COLORS, CATEGORY_OPTIONS, categoryLabel } from '../lib/categories';
 import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration } from '../lib/trackTypes';
 import { TIME_RANGES, rangeCutoff, rangeDateFormat } from '../lib/timeRanges';
 
@@ -75,8 +75,6 @@ export default function ExerciseHistory() {
 
   // All exercise names — used to step prev/next through the library.
   const [allNames, setAllNames] = useState([]);
-
-  const CATEGORY_OPTIONS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs', 'abs', 'mobility'];
 
   function buildChartFromSessions(sessionList, dateFmt = 'MMM d yy') {
     const ascending = [...sessionList].reverse();
@@ -357,7 +355,7 @@ export default function ExerciseHistory() {
             >
               <option value="">Uncategorized</option>
               {CATEGORY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                <option key={c} value={c}>{categoryLabel(c)}</option>
               ))}
             </select>
             <button onClick={saveExerciseEdit} disabled={savingExercise}
