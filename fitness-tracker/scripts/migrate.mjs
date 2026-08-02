@@ -55,6 +55,19 @@ async function main() {
     );
   }
 
+  // Catch the common case of the template being saved with the placeholder
+  // still in it, which would otherwise fail as a confusing auth error.
+  if (/\[YOUR-PASSWORD\]|your_password/i.test(url)) {
+    fail(
+      'DATABASE_URL still contains the [YOUR-PASSWORD] placeholder.',
+      `  Open fitness-tracker/.env and replace [YOUR-PASSWORD] (square brackets
+  included) with your Supabase database password.
+
+  Supabase dashboard -> Project Settings -> Database. If you don't know the
+  password, use "Reset database password" on that page.`
+    );
+  }
+
   const files = (await readdir(MIGRATIONS_DIR))
     .filter((f) => f.endsWith('.sql'))
     .sort();
