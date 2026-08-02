@@ -52,7 +52,6 @@ export default function AddFoodModal({
 }) {
   const [tab, setTab] = useState(lastTab);
   const [detail, setDetail] = useState(null); // { food, entryId } once a row is picked
-  const listRef = useRef(null);
 
   useEffect(() => { lastTab = tab; }, [tab]);
 
