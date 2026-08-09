@@ -1,110 +1,112 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { MEAL_TYPES, MEAL_LABELS, UNIT_TO_GRAMS } from '../lib/food';
+import {
+  parsePortions, portionOptions, portionLabel, defaultPortion,
+  scaleTo, scaleFrom, unitPortion, round1,
+} from '../lib/portions';
 import { defaultMealForNow } from '../lib/foodEntries';
+import PortionEditor from './PortionEditor';
 
 const inputCls = 'bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
-const r1 = (v) => Math.round(v * 10) / 10;
+const CUSTOM = '__custom__';
 
 /**
- * The single add/edit surface for a food entry — rendered inside the desktop
- * drawer and on the mobile /food/add route, and used for both logging a new
- * food and editing one already in the diary.
+ * The single add/edit surface for a food entry — the detail step of the add-food
+ * modal, used both for logging a new food and for editing one already in the
+ * diary.
  *
- * Amounts are servings or a weight. A weight needs to know what 100 g contains,
- * so when a food arrives without that the serving weight can be typed in here
- * ("1 serving = 35 g") and the per-100g values are derived from it.
+ * Per-100g nutrition is the only thing held in state, at full precision. The
+ * nutrition boxes show the selected portion's values because that is how a food
+ * packet or a menu board reads, but they are derived: typing in one converts
+ * back up to per-100g, and changing the portion re-renders them rescaled. That
+ * is why the numbers can no longer disagree with the weight.
  */
-export default function FoodPanel({ initial = {}, onSave, onCancel, onDelete, saveLabel = 'Add to log' }) {
+export default function FoodPanel({
+  initial = {}, onSave, onCancel, onDelete, saveLabel = 'Add to log', isNew = false,
+}) {
   const [mealType, setMealType] = useState(initial.meal_type || defaultMealForNow());
-  const [unit, setUnit] = useState(
-    initial.quantity_mode === 'grams' ? (initial.input_unit || 'g') : 'servings'
-  );
-  const [servings, setServings] = useState(String(initial.servings ?? 1));
-  const [amount, setAmount] = useState(
-    String(initial.input_amount ?? initial.grams ?? initial.serving_grams ?? 100)
-  );
-  const [servingSize, setServingSize] = useState(initial.serving_size || '');
-  const [servingGrams, setServingGrams] = useState(String(initial.serving_grams ?? ''));
   const [name, setName] = useState(initial.food_name || '');
-  const [cal, setCal] = useState(String(initial.calories ?? 0));
-  const [protein, setProtein] = useState(String(initial.protein_g ?? 0));
-  const [carbs, setCarbs] = useState(String(initial.carbs_g ?? 0));
-  const [fat, setFat] = useState(String(initial.fat_g ?? 0));
+
+  // The food's own portions, plus a plain 100 g option when it has none of its own
+  const [portions, setPortions] = useState(() => parsePortions(initial.portions));
+  const options = useMemo(() => portionOptions(portions), [portions]);
+
+  const [quantity, setQuantity] = useState(String(initial.quantity ?? 1));
+
+  // Editing an existing entry reopens on the portion it was logged with;
+  // anything else opens on the food's default, never on 100 g unless that is
+  // all the food has.
+  const [sel, setSel] = useState(() =>
+    initial.portion_grams > 0
+      ? { label: initial.portion_label || 'g', grams: initial.portion_grams }
+      : defaultPortion(portions)
+  );
+  const [custom, setCustom] = useState(() =>
+    initial.portion_grams > 0 && ['g', 'oz', 'ml'].includes(initial.portion_label)
+  );
+  const [customUnit, setCustomUnit] = useState(
+    ['g', 'oz', 'ml'].includes(initial.portion_label) ? initial.portion_label : 'g'
+  );
+
+  // Per 100 g, unrounded. The single source of truth for every number on screen.
+  const [per100, setPer100] = useState(() => seedPer100(initial));
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const sg = parseFloat(servingGrams);
+  const qty = parseFloat(quantity) || 0;
+  const perPortion = useMemo(() => scaleTo(per100, sel.grams), [per100, sel]);
+  const totals = useMemo(() => scaleTo(per100, qty * sel.grams), [per100, qty, sel]);
 
-  // Either the food came with per-100g data, or we can work it out from the
-  // serving weight the user typed in.
-  const per100 = useMemo(() => {
-    if (initial.cal_per_100g != null) {
-      return {
-        calories: initial.cal_per_100g,
-        protein_g: initial.protein_per_100g ?? 0,
-        carbs_g: initial.carbs_per_100g ?? 0,
-        fat_g: initial.fat_per_100g ?? 0,
-      };
-    }
-    if (sg > 0) {
-      const f = 100 / sg;
-      return {
-        calories: r1((parseFloat(cal) || 0) * f),
-        protein_g: r1((parseFloat(protein) || 0) * f),
-        carbs_g: r1((parseFloat(carbs) || 0) * f),
-        fat_g: r1((parseFloat(fat) || 0) * f),
-      };
-    }
-    return null;
-  }, [initial, sg, cal, protein, carbs, fat]);
+  /** Typing in a nutrition box: convert that portion's value back to per 100 g. */
+  function setField(field, typed) {
+    const next = { ...roundedPortion(perPortion), [field]: parseFloat(typed) || 0 };
+    setPer100(scaleFrom(next, sel.grams));
+  }
 
-  const canWeigh = per100 != null;
-  const gramsValue = unit === 'servings' ? null : (parseFloat(amount) || 0) * UNIT_TO_GRAMS[unit];
-
-  const totals = useMemo(() => {
-    if (unit !== 'servings' && per100) {
-      const f = gramsValue / 100;
-      return {
-        calories: per100.calories * f,
-        protein: per100.protein_g * f,
-        carbs: per100.carbs_g * f,
-        fat: per100.fat_g * f,
-      };
+  function pickPortion(value) {
+    if (value === CUSTOM) {
+      setCustom(true);
+      setSel(unitPortion(customUnit));
+      return;
     }
-    const s = parseFloat(servings) || 1;
-    return {
-      calories: (parseFloat(cal) || 0) * s,
-      protein: (parseFloat(protein) || 0) * s,
-      carbs: (parseFloat(carbs) || 0) * s,
-      fat: (parseFloat(fat) || 0) * s,
-    };
-  }, [unit, per100, gramsValue, servings, cal, protein, carbs, fat]);
+    setCustom(false);
+    setSel(options[Number(value)] || defaultPortion(portions));
+  }
+
+  function pickUnit(unit) {
+    setCustomUnit(unit);
+    setSel(unitPortion(unit));
+  }
 
   async function handleSave() {
     setError('');
     if (!name.trim()) { setError('Give the food a name.'); return; }
+    if (!(sel.grams > 0)) { setError('Give the portion a weight.'); return; }
     setSaving(true);
     try {
+      const cleanPortions = parsePortions(portions);
       await onSave({
         food_name: name.trim(),
         barcode: initial.barcode || '',
         meal_type: mealType,
-        quantity_mode: unit === 'servings' ? 'servings' : 'grams',
-        servings: parseFloat(servings) || 1,
-        grams: gramsValue,
-        input_unit: unit === 'servings' ? 'g' : unit,
-        input_amount: unit === 'servings' ? null : parseFloat(amount) || 0,
-        serving_size: servingSize,
-        serving_grams: sg > 0 ? sg : null,
-        calories: parseFloat(cal) || 0,
-        protein_g: parseFloat(protein) || 0,
-        carbs_g: parseFloat(carbs) || 0,
-        fat_g: parseFloat(fat) || 0,
-        cal_per_100g: per100 ? per100.calories : null,
-        protein_per_100g: per100 ? per100.protein_g : null,
-        carbs_per_100g: per100 ? per100.carbs_g : null,
-        fat_per_100g: per100 ? per100.fat_g : null,
+        quantity: qty || 1,
+        portion_label: sel.label,
+        portion_grams: sel.grams,
+        portions: cleanPortions,
+        // Kept so a saved entry still reads sensibly to anything that has not
+        // moved over to portions yet, and so the row is self-describing.
+        serving_size: portionLabel(sel),
+        serving_grams: sel.grams,
+        calories: round1(perPortion.calories),
+        protein_g: round1(perPortion.protein_g),
+        carbs_g: round1(perPortion.carbs_g),
+        fat_g: round1(perPortion.fat_g),
+        cal_per_100g: per100.calories,
+        protein_per_100g: per100.protein_g,
+        carbs_per_100g: per100.carbs_g,
+        fat_per_100g: per100.fat_g,
       });
     } catch (err) {
       setError(err.message || 'Could not save.');
@@ -112,6 +114,10 @@ export default function FoodPanel({ initial = {}, onSave, onCancel, onDelete, sa
       setSaving(false);
     }
   }
+
+  const selIndex = custom ? CUSTOM : options.findIndex(
+    (p) => p.label === sel.label && p.grams === sel.grams
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -137,83 +143,69 @@ export default function FoodPanel({ initial = {}, onSave, onCancel, onDelete, sa
         </div>
       </div>
 
-      {/* Amount */}
+      {/* Amount — how many of which portion */}
       <div className="flex flex-col gap-2">
         <label className="text-zinc-400 text-xs">Amount</label>
-        <div className="flex gap-2 flex-wrap">
-          {[['servings', 'Servings'], ['g', 'g'], ['oz', 'oz'], ['ml', 'ml']].map(([key, label]) => {
-            const disabled = key !== 'servings' && !canWeigh;
-            return (
-              <button key={key} onClick={() => !disabled && setUnit(key)} disabled={disabled}
-                title={disabled ? 'Set the serving weight below to log by weight' : ''}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
-                  unit === key ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/60 text-zinc-500 hover:text-zinc-300'
-                }`}>
-                {label}
-              </button>
-            );
-          })}
+        <div className="flex gap-2 items-stretch">
+          <input className={`${inputCls} w-20 shrink-0`} type="number" step="0.5" min="0"
+            aria-label="How many"
+            value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <select className={`${inputCls} flex-1 min-w-0`} aria-label="Portion"
+            value={selIndex === -1 ? CUSTOM : selIndex}
+            onChange={(e) => pickPortion(e.target.value)}>
+            {options.map((p, i) => (
+              <option key={`${p.label}-${i}`} value={i}>{portionLabel(p)}</option>
+            ))}
+            <option value={CUSTOM}>Custom weight…</option>
+          </select>
         </div>
 
-        {unit === 'servings' ? (
-          <div className="flex gap-3 items-end flex-wrap">
-            <div className="flex flex-col gap-1">
-              <label className="text-zinc-500 text-[10px]">How many</label>
-              <input className={`${inputCls} w-24`} type="number" step="0.5" min="0"
-                value={servings} onChange={(e) => setServings(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-32">
-              <label className="text-zinc-500 text-[10px]">A serving is</label>
-              <input className={inputCls} placeholder="e.g. 2 biscuits" value={servingSize}
-                onChange={(e) => setServingSize(e.target.value)} />
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <label className="text-zinc-500 text-[10px]">Amount in {unit}</label>
-            <input className={`${inputCls} w-28`} type="number" step={unit === 'oz' ? '0.1' : '1'} min="0"
-              value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {unit === 'oz' && gramsValue > 0 && (
-              <p className="text-zinc-600 text-[10px]">= {r1(gramsValue)} g</p>
+        {custom && (
+          <div className="flex gap-2 items-center">
+            {['g', 'oz', 'ml'].map((unit) => (
+              <button key={unit} onClick={() => pickUnit(unit)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  customUnit === unit ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/60 text-zinc-500 hover:text-zinc-300'
+                }`}>
+                {unit}
+              </button>
+            ))}
+            {customUnit === 'oz' && qty > 0 && (
+              <p className="text-zinc-600 text-[10px]">= {round1(qty * UNIT_TO_GRAMS.oz)} g</p>
             )}
           </div>
         )}
 
-        {/* Defining the serving weight is what unlocks logging by weight */}
-        <div className="flex items-end gap-2 flex-wrap">
-          <div className="flex flex-col gap-1">
-            <label className="text-zinc-500 text-[10px]">One serving weighs (g)</label>
-            <input className={`${inputCls} w-28`} type="number" step="0.1" min="0" placeholder="e.g. 35"
-              value={servingGrams} onChange={(e) => setServingGrams(e.target.value)} />
-          </div>
-          {!canWeigh && (
-            <p className="text-zinc-600 text-[11px] pb-2">Fill this in to log this food by weight.</p>
-          )}
-        </div>
+        <p className="text-zinc-600 text-[11px]">
+          That is {round1(qty * sel.grams)} g in total.
+        </p>
       </div>
 
-      {/* Nutrition */}
+      {/* Nutrition — shown for the selected portion, stored per 100 g */}
       <div className="flex flex-col gap-2">
         <label className="text-zinc-400 text-xs">
-          Nutrition per serving{servingSize ? ` (${servingSize})` : ''}
+          Nutrition per {portionLabel(sel)}
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {[['kcal', cal, setCal], ['Protein', protein, setProtein], ['Carbs', carbs, setCarbs], ['Fat', fat, setFat]].map(
-            ([label, value, set]) => (
-              <div key={label} className="flex flex-col gap-1">
-                <label className="text-zinc-500 text-[10px]">{label}</label>
-                <input className={`${inputCls} px-2`} type="number" step="0.1" min="0"
-                  value={value} onChange={(e) => set(e.target.value)} />
-              </div>
-            )
-          )}
+          {[
+            ['kcal', 'calories'], ['Protein', 'protein_g'],
+            ['Carbs', 'carbs_g'], ['Fat', 'fat_g'],
+          ].map(([label, field]) => (
+            <div key={field} className="flex flex-col gap-1">
+              <label className="text-zinc-500 text-[10px]">{label}</label>
+              <input className={`${inputCls} px-2`} type="number" step="0.1" min="0"
+                value={round1(perPortion[field])}
+                onChange={(e) => setField(field, e.target.value)} />
+            </div>
+          ))}
         </div>
-        {per100 && (
-          <p className="text-zinc-600 text-[11px]">
-            Per 100 g: {per100.calories} kcal · P {per100.protein_g} · C {per100.carbs_g} · F {per100.fat_g}
-          </p>
-        )}
+        <p className="text-zinc-600 text-[11px]">
+          Per 100 g: {round1(per100.calories)} kcal · P {round1(per100.protein_g)} · C {round1(per100.carbs_g)} · F {round1(per100.fat_g)}
+        </p>
       </div>
+
+      {/* Defining a new food: say what amounts it comes in */}
+      {isNew && <PortionEditor value={portions} onChange={setPortions} />}
 
       {/* Live total */}
       <div className="bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-3">
@@ -222,7 +214,7 @@ export default function FoodPanel({ initial = {}, onSave, onCancel, onDelete, sa
           {Math.round(totals.calories)}<span className="text-zinc-400 text-sm font-medium ml-1">kcal</span>
         </p>
         <p className="text-zinc-500 text-xs mt-1.5">
-          Protein {Math.round(totals.protein)} g · Carbs {Math.round(totals.carbs)} g · Fat {Math.round(totals.fat)} g
+          Protein {Math.round(totals.protein_g)} g · Carbs {Math.round(totals.carbs_g)} g · Fat {Math.round(totals.fat_g)} g
         </p>
       </div>
 
@@ -246,4 +238,37 @@ export default function FoodPanel({ initial = {}, onSave, onCancel, onDelete, sa
       </div>
     </div>
   );
+}
+
+/** Rounded copy of a portion's values, so editing one box does not drag the
+ *  others by a rounding hair on the way back to per-100g. */
+function roundedPortion(p) {
+  return {
+    calories: round1(p.calories), protein_g: round1(p.protein_g),
+    carbs_g: round1(p.carbs_g), fat_g: round1(p.fat_g),
+  };
+}
+
+/**
+ * Works out the per-100g basis a food arrives with. Preferring the stored
+ * per-100g values, falling back to per-serving values divided by the serving
+ * weight, and finally to zeros for a food being created from scratch.
+ */
+function seedPer100(initial) {
+  if (initial.cal_per_100g != null) {
+    return {
+      calories: initial.cal_per_100g,
+      protein_g: initial.protein_per_100g ?? 0,
+      carbs_g: initial.carbs_per_100g ?? 0,
+      fat_g: initial.fat_per_100g ?? 0,
+    };
+  }
+  const grams = initial.portion_grams ?? initial.serving_grams;
+  if (grams > 0 && initial.calories != null) {
+    return scaleFrom({
+      calories: initial.calories, protein_g: initial.protein_g,
+      carbs_g: initial.carbs_g, fat_g: initial.fat_g,
+    }, grams);
+  }
+  return { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
 }

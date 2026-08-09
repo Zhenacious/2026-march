@@ -1,0 +1,32 @@
+Go with Option 1 — portion list per food. Requirements
+
+1. FIX THE BUG nutrition values must always rescale when the amount or 
+   portion changes. Single source of truth per-100g data drives all maths. 
+   Changing portion or quantity recalculates kcalproteincarbsfat live.
+
+2. PORTION MODEL each food has a list of portions (e.g. 1 drumstick (90 g), 
+   1 thigh (130 g), 100 g, Custom weight…). Every food defaults to its 
+   most natural portion, not 100 g, when added to the log. Editing an entry 
+   shows the portion it was logged with.
+
+3. REMOVE REDUNDANCY delete the separate A serving is free-text box and 
+   One serving weighs (g) box. Replace with the single portion list editor. 
+   Migrate existing seed data into the new portion format.
+
+4. NZAU FAST FOOD LIBRARY add a fast food category with accurate NZAU 
+   menu nutrition data. Do these one chain at a time, confirming each before 
+   moving to the next, in this order
+   - McDonald's NZ (Big Mac, Quarter Pounder, McChicken, fries sizes, nuggets, 
+     cheeseburger, McFlurry etc.)
+   - Subway NZ (6-inch and footlong for common subs chicken teriyaki, 
+     meatball, BLT, veggie delite etc.)
+   - KFC NZ (original recipe pieces, wicked wings, popcorn chicken, burgers, 
+     potato & gravy)
+   - Burger King NZ (Whopper, cheeseburgers, fries, onion rings)
+   - Domino's NZ (per-slice values for value + traditional ranges)
+   Each item gets realistic portions (e.g. 1 Big Mac, 1 slice, 6 nuggets).
+
+5. After each chain is added, pause and show me a summary so I can verify 
+   before you continue to the next one.
+
+Start with the bug fix and portion model first, then the fast food data.

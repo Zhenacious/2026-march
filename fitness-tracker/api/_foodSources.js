@@ -182,11 +182,23 @@ async function fatSecretFood(foodId, token, barcode) {
     };
   }
 
+  // FatSecret usually lists several real serving options — "1 drumstick",
+  // "1 cup, chopped", "100 g". Keeping all of them means the food arrives with
+  // a proper portion list rather than a single arbitrary serving.
+  const portions = servings
+    .filter((x) => num(x.metric_serving_amount) > 0 && isMetric(x) && x.serving_description)
+    .map((x) => ({
+      label: String(x.serving_description).replace(/\s*\(\s*[\d.]+\s*(g|ml)\s*\)\s*$/i, '').trim(),
+      grams: num(x.metric_serving_amount),
+    }))
+    .filter((p) => p.label && p.grams > 0);
+
   return {
     source: 'fatsecret',
     barcode: barcode || '',
     name: food.food_name || 'Unknown product',
     brand: food.brand_name || '',
+    portions,
     serving_size: s.serving_description || '1 serving',
     serving_grams: num(s.metric_serving_amount) > 0 && isMetric(s) ? num(s.metric_serving_amount) : null,
     per_100g: per100g,

@@ -158,12 +158,15 @@ export default function TodayFood({ date }) {
 
   /** Keeps a found food in your own library so it is searchable instantly later. */
   async function saveToLibrary(f, key) {
+    const panel = toPanelFood(f);
     const row = {
       user_id: user.id,
       name: f.name,
       brand: String(f.brand || ''),
       aliases: f.aliases || '',
       barcode: f.barcode || '',
+      category: f.category || '',
+      portions: panel.portions,
       serving_size: f.serving_size || '',
       serving_grams: f.serving_grams ?? null,
       calories: f.calories || 0,
@@ -201,6 +204,7 @@ export default function TodayFood({ date }) {
       name: values.food_name,
       brand: '',
       barcode: values.barcode || '',
+      portions: values.portions || [],
       serving_size: values.serving_size || '',
       serving_grams: values.serving_grams ?? null,
       calories: values.calories, protein_g: values.protein_g,
@@ -384,7 +388,8 @@ export default function TodayFood({ date }) {
         }}
         createForm={
           <FoodPanel
-            initial={{ food_name: '', serving_size: '1 serving' }}
+            initial={{ food_name: '', portions: [{ label: '1 serving', grams: 100 }] }}
+            isNew
             saveLabel="Create and log"
             onSave={createAndLog}
             onCancel={closeModal}

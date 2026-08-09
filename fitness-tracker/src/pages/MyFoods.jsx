@@ -1,19 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Library, Plus, Pencil, Trash2, Search, Check, X, Download } from 'lucide-react';
+import { Library, Plus, Pencil, Trash2, Search, Check, X, Download, Utensils } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { STARTER_FOODS, STARTER_FOOD_COUNT } from '../lib/starterFoods';
+import { FAST_FOOD_CHAINS } from '../lib/fastFoods';
 import { friendlyDbError } from '../lib/foodEntries';
+import { parsePortions, portionLabel, defaultPortion, scaleTo, round1 } from '../lib/portions';
 import AlphaList from '../components/AlphaList';
+import PortionEditor from '../components/PortionEditor';
 
 const BLANK = {
-  name: '', brand: '', aliases: '', barcode: '', serving_size: '1 serving', serving_grams: '',
-  calories: '', protein_g: '', carbs_g: '', fat_g: '',
+  name: '', brand: '', aliases: '', barcode: '', category: '',
+  portions: [{ label: '1 serving', grams: 100 }],
+  cal_per_100g: '', protein_per_100g: '', carbs_per_100g: '', fat_per_100g: '',
 };
 
 const inputCls = 'bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500';
 
-/** Add/edit form for one saved food. Macros are per one serving. */
+/**
+ * Add/edit form for one saved food.
+ *
+ * Nutrition is entered per 100 g here, because that is a food's definition —
+ * the amounts it comes in are the portions below it, and every portion's
+ * numbers are worked out from the per-100g figures. Entering an amount for a
+ * specific portion happens on the log screen instead.
+ */
 function FoodForm({ initial, onSave, onCancel }) {
   const [v, setV] = useState(() => ({ ...BLANK, ...initial }));
   const [saving, setSaving] = useState(false);
@@ -21,30 +32,39 @@ function FoodForm({ initial, onSave, onCancel }) {
 
   function set(field, value) { setV((prev) => ({ ...prev, [field]: value })); }
 
+  const per100 = {
+    calories: parseFloat(v.cal_per_100g) || 0,
+    protein_g: parseFloat(v.protein_per_100g) || 0,
+    carbs_g: parseFloat(v.carbs_per_100g) || 0,
+    fat_g: parseFloat(v.fat_per_100g) || 0,
+  };
+  const portions = parsePortions(v.portions);
+  const preview = portions.length ? scaleTo(per100, portions[0].grams) : null;
+
   async function submit() {
     if (!String(v.name).trim()) { setErr('Give the food a name.'); return; }
     setErr('');
     setSaving(true);
     try {
-      const grams = parseFloat(v.serving_grams);
-      const cal = parseFloat(v.calories) || 0;
-      const p = parseFloat(v.protein_g) || 0;
-      const c = parseFloat(v.carbs_g) || 0;
-      const f = parseFloat(v.fat_g) || 0;
-      // Knowing the serving weight lets the log screen offer grams/oz amounts
-      const factor = grams > 0 ? 100 / grams : null;
+      const first = portions[0] || null;
       await onSave({
         name: String(v.name).trim(),
         brand: String(v.brand || '').trim(),
         aliases: String(v.aliases || '').trim(),
         barcode: String(v.barcode || '').trim(),
-        serving_size: String(v.serving_size || '').trim(),
-        serving_grams: grams > 0 ? grams : null,
-        calories: cal, protein_g: p, carbs_g: c, fat_g: f,
-        cal_per_100g: factor ? Math.round(cal * factor * 10) / 10 : null,
-        protein_per_100g: factor ? Math.round(p * factor * 10) / 10 : null,
-        carbs_per_100g: factor ? Math.round(c * factor * 10) / 10 : null,
-        fat_per_100g: factor ? Math.round(f * factor * 10) / 10 : null,
+        category: String(v.category || '').trim(),
+        portions,
+        cal_per_100g: per100.calories,
+        protein_per_100g: per100.protein_g,
+        carbs_per_100g: per100.carbs_g,
+        fat_per_100g: per100.fat_g,
+        // The default portion's values, kept so a row is readable on its own
+        serving_size: first ? portionLabel(first) : '',
+        serving_grams: first ? first.grams : null,
+        calories: first ? round1(scaleTo(per100, first.grams).calories) : 0,
+        protein_g: first ? round1(scaleTo(per100, first.grams).protein_g) : 0,
+        carbs_g: first ? round1(scaleTo(per100, first.grams).carbs_g) : 0,
+        fat_g: first ? round1(scaleTo(per100, first.grams).fat_g) : 0,
       });
     } catch (e) {
       setErr(e.message || 'Could not save.');
@@ -71,21 +91,16 @@ function FoodForm({ initial, onSave, onCancel }) {
           <input className={inputCls} placeholder="e.g. 老干妈, laoganma, chilli crisp"
             value={v.aliases} onChange={(e) => set('aliases', e.target.value)} />
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-zinc-400 text-xs">Serving description</label>
-          <input className={inputCls} placeholder="e.g. 2 biscuits" value={v.serving_size}
-            onChange={(e) => set('serving_size', e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-zinc-400 text-xs">Serving weight in grams (optional)</label>
-          <input className={inputCls} type="number" step="0.1" min="0" placeholder="e.g. 35"
-            value={v.serving_grams} onChange={(e) => set('serving_grams', e.target.value)} />
-        </div>
       </div>
 
-      <p className="text-zinc-400 text-xs">Nutrition per serving</p>
+      <PortionEditor value={v.portions} onChange={(p) => set('portions', p)} />
+
+      <p className="text-zinc-400 text-xs">
+        Nutrition per 100 g <span className="text-zinc-600">— every portion is worked out from this</span>
+      </p>
       <div className="grid grid-cols-4 gap-2">
-        {[['kcal', 'calories'], ['Protein', 'protein_g'], ['Carbs', 'carbs_g'], ['Fat', 'fat_g']].map(([label, field]) => (
+        {[['kcal', 'cal_per_100g'], ['Protein', 'protein_per_100g'],
+          ['Carbs', 'carbs_per_100g'], ['Fat', 'fat_per_100g']].map(([label, field]) => (
           <div key={field} className="flex flex-col gap-1">
             <label className="text-zinc-500 text-[10px]">{label}</label>
             <input className={`${inputCls} px-2`} type="number" step="0.1" min="0"
@@ -93,6 +108,12 @@ function FoodForm({ initial, onSave, onCancel }) {
           </div>
         ))}
       </div>
+      {preview && (
+        <p className="text-zinc-600 text-[11px]">
+          {portionLabel(portions[0])} works out to {Math.round(preview.calories)} kcal ·
+          {' '}P {round1(preview.protein_g)} · C {round1(preview.carbs_g)} · F {round1(preview.fat_g)}
+        </p>
+      )}
 
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel}
@@ -115,9 +136,10 @@ export default function MyFoods() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [seeding, setSeeding] = useState(false);
+  const [seeding, setSeeding] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -135,14 +157,21 @@ export default function MyFoods() {
     return () => { cancelled = true; };
   }, [user]);
 
+  const categories = useMemo(() => {
+    const set = new Set(foods.map((f) => (f.category || '').trim()).filter(Boolean));
+    return [...set].sort();
+  }, [foods]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return foods;
-    return foods.filter((f) =>
-      f.name.toLowerCase().includes(q)
-      || (f.brand || '').toLowerCase().includes(q)
-      || (f.aliases || '').toLowerCase().includes(q));
-  }, [foods, search]);
+    return foods.filter((f) => {
+      if (category && (f.category || '') !== category) return false;
+      if (!q) return true;
+      return f.name.toLowerCase().includes(q)
+        || (f.brand || '').toLowerCase().includes(q)
+        || (f.aliases || '').toLowerCase().includes(q);
+    });
+  }, [foods, search, category]);
 
   async function addFood(values) {
     const { data, error: err } = await supabase
@@ -161,16 +190,19 @@ export default function MyFoods() {
     setEditing(null);
   }
 
-  /** Fills an empty library with common foods so browsing is useful from day one. */
-  async function loadStarterFoods() {
-    setSeeding(true);
+  /**
+   * Bulk-adds a set of foods, skipping any already in the library. Used by both
+   * the starter foods and each fast food chain.
+   */
+  async function loadFoods(key, rows) {
+    setSeeding(key);
     setError('');
     try {
-      const have = new Set(foods.map((f) => f.name.toLowerCase()));
-      const toAdd = STARTER_FOODS
-        .filter((f) => !have.has(f.name.toLowerCase()))
+      const have = new Set(foods.map((f) => `${f.name.toLowerCase()}|${(f.brand || '').toLowerCase()}`));
+      const toAdd = rows
+        .filter((f) => !have.has(`${f.name.toLowerCase()}|${(f.brand || '').toLowerCase()}`))
         .map((f) => ({ ...f, user_id: user.id, barcode: '' }));
-      if (toAdd.length === 0) { setSeeding(false); return; }
+      if (toAdd.length === 0) { setSeeding(''); return; }
 
       // Chunked so one oversized request can't fail the whole import
       const added = [];
@@ -184,7 +216,7 @@ export default function MyFoods() {
     } catch (err) {
       setError(friendlyDbError(err, 'your saved foods'));
     } finally {
-      setSeeding(false);
+      setSeeding('');
     }
   }
 
@@ -223,13 +255,48 @@ export default function MyFoods() {
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus className="w-4 h-4" /> Add food
         </button>
-        <button onClick={loadStarterFoods} disabled={seeding}
+        <button onClick={() => loadFoods('starter', STARTER_FOODS)} disabled={!!seeding}
           title={`Adds ${STARTER_FOOD_COUNT} common foods, skipping any you already have`}
           className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Download className="w-4 h-4" />
-          {seeding ? 'Loading…' : 'Load starter foods'}
+          {seeding === 'starter' ? 'Loading…' : 'Load starter foods'}
         </button>
       </div>
+
+      {/* Fast food, loaded a chain at a time so you only get the ones you eat at */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Utensils className="w-4 h-4 text-zinc-500" />
+          <h2 className="text-zinc-200 text-sm font-semibold">Fast food menus</h2>
+        </div>
+        <p className="text-zinc-500 text-xs mb-3">
+          New Zealand menu nutrition, taken from each chain&rsquo;s published figures. Add only the
+          ones you want — everything stays editable afterwards.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          {FAST_FOOD_CHAINS.map((chain) => (
+            <button key={chain.key} onClick={() => loadFoods(chain.key, chain.rows)} disabled={!!seeding}
+              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 px-3 py-2 rounded-lg text-xs font-medium transition-colors">
+              <Download className="w-3.5 h-3.5" />
+              {seeding === chain.key ? 'Loading…' : chain.name}
+              <span className="text-zinc-600">{chain.rows.length}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {categories.length > 0 && (
+        <div className="flex gap-2 flex-wrap mb-4">
+          {[['', 'All'], ...categories.map((c) => [c, c])].map(([key, label]) => (
+            <button key={key || 'all'} onClick={() => setCategory(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                category === key ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {adding && (
         <div className="bg-zinc-900 border border-teal-800/50 rounded-2xl p-5 mb-4">
@@ -260,48 +327,63 @@ export default function MyFoods() {
                 <FoodForm
                   initial={{
                     ...f,
-                    serving_grams: f.serving_grams ?? '',
-                    calories: f.calories ?? '',
-                    protein_g: f.protein_g ?? '',
-                    carbs_g: f.carbs_g ?? '',
-                    fat_g: f.fat_g ?? '',
+                    portions: parsePortions(f.portions),
+                    cal_per_100g: f.cal_per_100g ?? '',
+                    protein_per_100g: f.protein_per_100g ?? '',
+                    carbs_per_100g: f.carbs_per_100g ?? '',
+                    fat_per_100g: f.fat_per_100g ?? '',
                   }}
                   onSave={(values) => updateFood(f.id, values)}
                   onCancel={() => setEditing(null)}
                 />
               </div>
             ) : (
-              <div key={f.id} className="flex items-center justify-between px-5 py-3">
-                <div className="min-w-0">
-                  <p className="text-zinc-100 text-sm font-medium truncate">
-                    {f.name}
-                    {f.brand && <span className="text-zinc-500 font-normal"> · {f.brand}</span>}
-                  </p>
-                  <p className="text-zinc-500 text-xs">
-                    {Math.round(f.calories)} kcal / {f.serving_size || 'serving'}
-                    {f.serving_grams ? ` (${f.serving_grams} g)` : ''}
-                    {' · '}P {Math.round(f.protein_g)} · C {Math.round(f.carbs_g)} · F {Math.round(f.fat_g)}
-                  </p>
-                  {f.aliases && (
-                    <p className="text-zinc-600 text-[11px] truncate">{f.aliases}</p>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0 ml-2">
-                  <button onClick={() => { setEditing(f); setAdding(false); }}
-                    className="text-zinc-600 hover:text-teal-400 p-1.5 rounded transition-colors">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => deleteFood(f.id)}
-                    className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+              <FoodRow key={f.id} food={f}
+                onEdit={() => { setEditing(f); setAdding(false); }}
+                onDelete={() => deleteFood(f.id)} />
             )
           )}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** One saved food, summarised by its default portion. */
+function FoodRow({ food, onEdit, onDelete }) {
+  const portion = defaultPortion(food.portions);
+  const per100 = {
+    calories: food.cal_per_100g ?? 0, protein_g: food.protein_per_100g ?? 0,
+    carbs_g: food.carbs_per_100g ?? 0, fat_g: food.fat_per_100g ?? 0,
+  };
+  const t = scaleTo(per100, portion.grams);
+  return (
+    <div className="flex items-center justify-between px-5 py-3">
+      <div className="min-w-0">
+        <p className="text-zinc-100 text-sm font-medium truncate">
+          {food.name}
+          {food.brand && <span className="text-zinc-500 font-normal"> · {food.brand}</span>}
+        </p>
+        <p className="text-zinc-500 text-xs">
+          {Math.round(t.calories)} kcal / {portionLabel(portion)}
+          {' · '}P {Math.round(t.protein_g)} · C {Math.round(t.carbs_g)} · F {Math.round(t.fat_g)}
+        </p>
+        <p className="text-zinc-600 text-[11px] truncate">
+          {Math.round(per100.calories)} kcal/100 g
+          {food.aliases ? ` · ${food.aliases}` : ''}
+        </p>
+      </div>
+      <div className="flex gap-1 shrink-0 ml-2">
+        <button onClick={onEdit} aria-label="Edit food"
+          className="text-zinc-600 hover:text-teal-400 p-1.5 rounded transition-colors">
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button onClick={onDelete} aria-label="Delete food"
+          className="text-zinc-600 hover:text-red-400 p-1.5 rounded transition-colors">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }

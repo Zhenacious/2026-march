@@ -4,6 +4,7 @@ import { X, ChevronLeft, Search, Library, History, ChefHat, PlusCircle, Utensils
 import FoodPanel from './FoodPanel';
 import AlphaList from './AlphaList';
 import { toPanelFood } from '../lib/foodEntries';
+import { parsePortions, defaultPortion, portionLabel, stripWeight, scaleTo } from '../lib/portions';
 
 const TABS = [
   { key: 'search', label: 'Search', icon: Search },
@@ -16,8 +17,22 @@ const TABS = [
 /** Remembered for the session so reopening lands where you left off. */
 let lastTab = 'search';
 
-/** One dense result row: name bold on the left, brand muted on the right. */
+/**
+ * One dense result row: name bold on the left, brand muted on the right. The
+ * subtitle quotes the food's default portion, which is what tapping it will
+ * open on.
+ */
 function FoodRow({ food, onPick, right }) {
+  const portion = defaultPortion(
+    parsePortions(food.portions).length
+      ? food.portions
+      : (food.serving_grams > 0
+          ? [{ label: stripWeight(food.serving_size) || '1 serving', grams: food.serving_grams }]
+          : [])
+  );
+  const kcal = food.cal_per_100g != null
+    ? scaleTo({ calories: food.cal_per_100g }, portion.grams).calories
+    : (food.calories || 0);
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 hover:bg-zinc-800/50 transition-colors">
       <button onClick={onPick} className="flex items-center gap-3 flex-1 min-w-0 text-left">
@@ -27,7 +42,7 @@ function FoodRow({ food, onPick, right }) {
         <span className="flex-1 min-w-0">
           <span className="block text-zinc-100 text-sm font-medium truncate">{food.name}</span>
           <span className="block text-zinc-500 text-xs truncate">
-            {Math.round(food.calories || 0)} kcal · {food.serving_size || 'serving'}
+            {Math.round(kcal)} kcal · {portionLabel(portion)}
           </span>
         </span>
         {food.brand && (

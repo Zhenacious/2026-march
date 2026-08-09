@@ -4,6 +4,7 @@ import { entryTotals, dayTotals, recentFoods, amountLabel, UNIT_TO_GRAMS } from 
 import {
   parsePortions, portionLabel, defaultPortion, portionOptions, scaleTo, scaleFrom, stripWeight,
 } from '../src/lib/portions.js';
+import { STARTER_FOODS } from '../src/lib/starterFoods.js';
 
 let pass = 0, fail = 0;
 function check(name, actual, expected) {
@@ -162,6 +163,40 @@ for (const legacy of LEGACY) {
   check(`${legacy.name} carbs`, after.carbs, before.carbs);
   check(`${legacy.name} fat`, after.fat, before.fat);
 }
+
+// ── The reported bug ────────────────────────────────────────────────────────
+// Switching portion used to leave the nutrition boxes frozen, because the panel
+// took the food's stored per-100g values and never rescaled them. These checks
+// walk a real starter food through the same maths the panel does.
+
+console.log('\nswitching portion rescales the nutrition on screen:');
+const chicken = STARTER_FOODS.find((f) => f.name === 'Chicken breast, skinless, raw');
+const per100 = {
+  calories: chicken.cal_per_100g, protein_g: chicken.protein_per_100g,
+  carbs_g: chicken.carbs_per_100g, fat_g: chicken.fat_per_100g,
+};
+checkStr('opens on a real portion, not 100 g', defaultPortion(chicken.portions).label, '1 breast');
+check('1 breast (170 g)', scaleTo(per100, 170).calories, 280.5);
+check('1/2 breast (85 g)', scaleTo(per100, 85).calories, 140.25);
+check('100 g', scaleTo(per100, 100).calories, 165);
+check('2 x 1 breast entry', entryTotals({
+  quantity: 2, portion_label: '1 breast', portion_grams: 170,
+  cal_per_100g: chicken.cal_per_100g, protein_per_100g: chicken.protein_per_100g,
+  carbs_per_100g: chicken.carbs_per_100g, fat_per_100g: chicken.fat_per_100g,
+}).calories, 561);
+
+console.log('\na drumstick is a thing you can pick:');
+const thigh = STARTER_FOODS.find((f) => f.name === 'Chicken thigh, skinless, raw');
+const drumstick = thigh.portions.find((p) => p.label === '1 drumstick');
+checkStr('drumstick exists', drumstick ? 'yes' : 'no', 'yes');
+check('1 drumstick (90 g)', scaleTo({ calories: thigh.cal_per_100g }, drumstick.grams).calories, 161.1);
+
+console.log('\ntyping a corrected value writes back to per 100 g:');
+// The packet says 1 breast is really 300 kcal, not 280.5
+const corrected = scaleFrom({ ...scaleTo(per100, 170), calories: 300 }, 170);
+check('per-100g follows the correction', corrected.calories, 176.47);
+check('and 100 g now reads the same way', scaleTo(corrected, 100).calories, 176.47);
+check('protein untouched by a calorie edit', scaleTo(corrected, 170).protein_g, 52.7);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
