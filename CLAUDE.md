@@ -33,6 +33,7 @@ A React + Supabase fitness tracker app located in `fitness-tracker/`.
 | `/exercises/:name` | `ExerciseHistory.jsx` | Per-exercise history + e1RM chart |
 | `/calendar` | `CalendarView.jsx` | Monthly calendar of workout days |
 | `/progress` | `Progress.jsx` | Progress charts per exercise |
+| `/records` | `PersonalRecords.jsx` | All-time bests per exercise, filterable by muscle group |
 | `/import` | `Import.jsx` | Import from FitNotes CSV |
 
 ## Database (Supabase)
@@ -98,6 +99,9 @@ Charts for tracking improvement on a specific exercise over time. You pick an ex
 - A bar chart of total training volume (sets × reps × weight) per session
 You can also star an exercise to make it the default that loads when you open this page.
 
+**Personal Records (`PersonalRecords.jsx`, `/records`)**
+A ranked list of all-time bests, one card per exercise: best estimated 1RM, heaviest weight ever lifted, and most reps in a single set, each with the date it was set. Filterable by muscle group with the same tabs used elsewhere in the app.
+
 **Import (`Import.jsx`)**
 Lets you upload a CSV file exported from the FitNotes app and import all your historical workout data in one go. It shows a preview of the first 10 rows before importing, and shows a progress bar during the upload.
 
@@ -121,9 +125,6 @@ Lets you upload a CSV file exported from the FitNotes app and import all your hi
 4. **Calendar is read-only.**
    You can see what you did on a given day from the calendar, but you can't edit or delete sets from there — you have to click "Go to Workout" to make changes.
 
-5. **No Personal Records page.**
-   There's no page showing your all-time bests per exercise (heaviest weight ever lifted, most reps, best estimated 1RM). This was started in a previous session but not finished.
-
 ---
 
 ### Obvious next steps
@@ -131,8 +132,7 @@ Lets you upload a CSV file exported from the FitNotes app and import all your hi
 In rough order of usefulness:
 
 1. **Fix or re-implement the AI auto-categorize endpoint** — or remove the button if it's not needed, to avoid confusion.
-2. **Personal Records page** — a clean list of all-time bests per exercise, sortable and filterable by muscle group. Low effort, high value.
-3. **Dashboard improvements** — add a workout streak counter and a simple 7-day activity summary.
-4. **Extract shared colour/category config** — move `CATEGORY_COLORS` and `MUSCLE_GROUPS` into a single shared file (`src/lib/categories.js`) so it only needs to be edited in one place.
-5. **Workout Templates** — save a named list of exercises (e.g. "Push Day") and load it into the Workout Log so you're prompted through your planned exercises.
-6. **Notes field on workouts** — a free-text note per session ("felt strong today", "left shoulder tight") stored against the workout date.
+2. **Dashboard improvements** — add a workout streak counter and a simple 7-day activity summary.
+3. **Extract shared colour/category config** — move `CATEGORY_COLORS` and `MUSCLE_GROUPS` into a single shared file (`src/lib/categories.js`) so it only needs to be edited in one place.
+4. **Workout Templates** — save a named list of exercises (e.g. "Push Day") and load it into the Workout Log so you're prompted through your planned exercises.
+5. **Notes field on workouts** — a free-text note per session ("felt strong today", "left shoulder tight") stored against the workout date.
