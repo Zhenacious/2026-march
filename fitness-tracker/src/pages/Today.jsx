@@ -56,10 +56,13 @@ function commitOnEnter(e) {
   }
 }
 
-// One labelled +/- stepper with a numeric input in the middle.
-function Stepper({ label, value, onChange, step = 1, min = 0, max }) {
+// One labelled +/- stepper with a numeric input in the middle. `ghost` is
+// last time's value: shown as a faded placeholder while the field is empty,
+// and used as the base the first time +/- is tapped.
+function Stepper({ label, value, onChange, step = 1, min = 0, max, ghost }) {
   const adjust = (delta) => {
-    const n = parseInt(value, 10);
+    const base = value !== '' ? value : (ghost ?? '');
+    const n = parseInt(base, 10);
     let next = (Number.isFinite(n) ? n : 0) + delta;
     if (next < min) next = min;
     if (max != null && next > max) next = max;
@@ -72,8 +75,8 @@ function Stepper({ label, value, onChange, step = 1, min = 0, max }) {
         <button type="button" onClick={() => adjust(-step)}
           className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
         <input type="number" inputMode="numeric" value={value}
-          onChange={(e) => onChange(e.target.value)} placeholder="0"
-          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
+          onChange={(e) => onChange(e.target.value)} placeholder={ghost || '0'}
+          className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
         <button type="button" onClick={() => adjust(step)}
           className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
       </div>
@@ -82,25 +85,25 @@ function Stepper({ label, value, onChange, step = 1, min = 0, max }) {
 }
 
 // H : M : S steppers for time-based exercises.
-function TimeSteppers({ values, onChange }) {
+function TimeSteppers({ values, onChange, ghost }) {
   return (
     <div className="grid grid-cols-3 gap-3">
-      <Stepper label="Hours" value={values.h} onChange={(v) => onChange({ ...values, h: v })} step={1} />
-      <Stepper label="Minutes" value={values.m} onChange={(v) => onChange({ ...values, m: v })} step={1} max={59} />
-      <Stepper label="Seconds" value={values.s} onChange={(v) => onChange({ ...values, s: v })} step={5} max={59} />
+      <Stepper label="Hours" value={values.h} onChange={(v) => onChange({ ...values, h: v })} step={1} ghost={ghost?.h} />
+      <Stepper label="Minutes" value={values.m} onChange={(v) => onChange({ ...values, m: v })} step={1} max={59} ghost={ghost?.m} />
+      <Stepper label="Seconds" value={values.s} onChange={(v) => onChange({ ...values, s: v })} step={5} max={59} ghost={ghost?.s} />
     </div>
   );
 }
 
 // Distance value + unit, for distance_time exercises.
-function DistanceField({ values, onChange }) {
+function DistanceField({ values, onChange, ghost }) {
   return (
     <div>
       <p className="text-[10px] text-zinc-500 text-center mb-1">Distance</p>
       <div className="flex items-center gap-1.5">
         <input type="number" inputMode="decimal" value={values.distance}
-          onChange={(e) => onChange({ ...values, distance: e.target.value })} placeholder="0"
-          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
+          onChange={(e) => onChange({ ...values, distance: e.target.value })} placeholder={ghost?.distance || '0'}
+          className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost?.distance ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
         <select value={values.distanceUnit}
           onChange={(e) => onChange({ ...values, distanceUnit: e.target.value })}
           className="bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-xl px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
@@ -113,44 +116,51 @@ function DistanceField({ values, onChange }) {
 
 // Renders the right input fields for a given track type. `values` is the shared
 // entry shape from trackTypes.emptyValues().
-function SetEntryFields({ trackType, values, onChange }) {
-  if (trackType === 'time') return <TimeSteppers values={values} onChange={onChange} />;
+function SetEntryFields({ trackType, values, onChange, ghost }) {
+  if (trackType === 'time') return <TimeSteppers values={values} onChange={onChange} ghost={ghost} />;
   if (trackType === 'distance_time') {
     return (
       <div className="space-y-2.5">
-        <DistanceField values={values} onChange={onChange} />
-        <TimeSteppers values={values} onChange={onChange} />
+        <DistanceField values={values} onChange={onChange} ghost={ghost} />
+        <TimeSteppers values={values} onChange={onChange} ghost={ghost} />
       </div>
     );
   }
-  return <StepperPair values={values} onChange={onChange} />;
+  return <StepperPair values={values} onChange={onChange} ghost={ghost} />;
 }
 
 // ─── Weight + Reps stepper pair (shared by the entry pad and the edit form) ────
-function StepperPair({ values, onChange }) {
+// `ghost` (optional) is last time's values: shown as faded placeholders in
+// empty inputs, and used as the starting point when +/- is tapped on an empty
+// field — so one tap on "+" means "last time's weight plus one increment".
+function StepperPair({ values, onChange, ghost }) {
+  const weightBase = values.weightKg !== '' ? values.weightKg : (ghost?.weightKg ?? '');
+  const repsBase = values.reps !== '' ? values.reps : (ghost?.reps ?? '');
+  const inputClass = (hasGhost) =>
+    `flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${hasGhost ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`;
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
         <p className="text-[10px] text-zinc-500 text-center mb-1">Weight (kg)</p>
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(values.weightKg, -2.5) })}
+          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, -2.5) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
           <input type="number" inputMode="decimal" value={values.weightKg}
-            onChange={(e) => onChange({ ...values, weightKg: e.target.value })} placeholder="0"
-            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
-          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(values.weightKg, 2.5) })}
+            onChange={(e) => onChange({ ...values, weightKg: e.target.value })} placeholder={ghost?.weightKg || '0'}
+            className={inputClass(!!ghost?.weightKg)} />
+          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, 2.5) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
         </div>
       </div>
       <div>
         <p className="text-[10px] text-zinc-500 text-center mb-1">Reps</p>
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(values.reps, -1) })}
+          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, -1) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
           <input type="number" inputMode="numeric" value={values.reps}
-            onChange={(e) => onChange({ ...values, reps: e.target.value })} placeholder="0"
-            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600 rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center" />
-          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(values.reps, 1) })}
+            onChange={(e) => onChange({ ...values, reps: e.target.value })} placeholder={ghost?.reps || '0'}
+            className={inputClass(!!ghost?.reps)} />
+          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, 1) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
         </div>
       </div>
@@ -178,10 +188,13 @@ function SetTypePills({ value, onChange }) {
 // — once the app is added to the iOS Home Screen — it fills the device edge to edge.
 function ExerciseLogSheet({
   name, trackType, color, categoryLabel, sets, stats, prSetIds, flashSetId,
-  setNotes, onSaveNote, prefill, saving,
+  setNotes, onSaveNote, ghost, saving,
   onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onViewHistory, onClose, onPrev, onNext,
 }) {
-  const [entry, setEntry] = useState(prefill || emptyValues());
+  // The entry pad starts empty; `ghost` (your most recent set for this
+  // exercise) shows through as faded placeholder numbers to beat, and seeds
+  // the +/- steppers so one tap starts from last time's value.
+  const [entry, setEntry] = useState(() => emptyValues());
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState(() => emptyValues());
   const [tappedSetId, setTappedSetId] = useState(null);
@@ -191,12 +204,20 @@ function ExerciseLogSheet({
   // Switching exercise (prev/next) reuses this sheet — reset the entry pad and
   // any in-progress edit to the newly-focused exercise.
   useEffect(() => {
-    setEntry(prefill || emptyValues());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEntry(emptyValues());
     setEditingSetId(null);
     setTappedSetId(null);
-    // Only react to the exercise changing, not to prefill recomputes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
+
+  // Ghost values are references only — Add Set stays disabled until you've
+  // entered (or stepped to) at least one real value, so they can't be logged
+  // by accident.
+  const hasEntry = trackType === 'time'
+    ? entry.h !== '' || entry.m !== '' || entry.s !== ''
+    : trackType === 'distance_time'
+      ? entry.distance !== '' || entry.h !== '' || entry.m !== '' || entry.s !== ''
+      : entry.weightKg !== '' || entry.reps !== '';
 
   const todayVol = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
   const lastVol = stats?.lastSessionVolume;
@@ -338,14 +359,14 @@ function ExerciseLogSheet({
 
         {/* Docked entry pad */}
         <div className="border-t border-zinc-800 bg-zinc-900/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] space-y-2.5 flex-shrink-0">
-          <SetEntryFields trackType={trackType} values={entry} onChange={setEntry} />
+          <SetEntryFields trackType={trackType} values={entry} onChange={setEntry} ghost={ghost} />
           <div className="flex items-center gap-2">
             {isWeight && (
               <div className="flex-1">
                 <SetTypePills value={entry.setType} onChange={(v) => setEntry((e) => ({ ...e, setType: v }))} />
               </div>
             )}
-            <button onClick={() => onAddSet(entry)} disabled={saving}
+            <button onClick={() => onAddSet(entry)} disabled={saving || !hasEntry}
               className={`bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${isWeight ? 'flex-shrink-0' : 'flex-1'}`}>
               <Plus className="w-4 h-4" /> {saving ? 'Adding…' : 'Add Set'}
             </button>
@@ -437,7 +458,14 @@ function TemplatesSheet({ templates, currentExercises, onLoad, onDelete, onSave,
 // ─── Add Exercise bottom sheet ──────────────────────────────────────────────
 function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect, onCreateNew, onClose, onEditExercise }) {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('All');
+  // Opens on the muscle-group tab you last used (saved on the device), so
+  // mid-session you land straight back on the group you're training.
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fittrack_last_muscle_tab');
+      return FILTER_TABS.some((t) => t.label === saved) ? saved : 'All';
+    } catch { return 'All'; }
+  });
   const [editingId, setEditingId] = useState(null);
   const inputRef = useRef(null);
 
@@ -520,7 +548,10 @@ function AddExerciseSheet({ exercises, recentNames = [], freqMap = {}, onSelect,
               return (
                 <button
                   key={tab.label}
-                  onClick={() => setActiveTab(tab.label)}
+                  onClick={() => {
+                    setActiveTab(tab.label);
+                    try { localStorage.setItem('fittrack_last_muscle_tab', tab.label); } catch { /* ignore */ }
+                  }}
                   className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-shrink-0 ${
                     isActive ? 'bg-teal-600 text-white border-teal-600' : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200'
                   }`}
@@ -626,8 +657,11 @@ export default function Today() {
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showSheet, setShowSheet] = useState(false);
-  // Which exercise's full-screen log sheet is open (null = day list view)
-  const [openExercise, setOpenExercise] = useState(null);
+  // Which exercise's full-screen log sheet is open (null = day list view).
+  // Lives in the URL (?exercise=) so coming back from the History page — or
+  // refreshing — reopens the exercise you were logging, and the phone's back
+  // gesture closes the sheet instead of leaving the page.
+  const openExercise = searchParams.get('exercise') || null;
   const [saving, setSaving] = useState(false);
 
   const [exerciseStats, setExerciseStats] = useState({});
@@ -772,7 +806,6 @@ export default function Today() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    setOpenExercise(null);
     setPendingExercises([]);
     try {
       const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
@@ -863,21 +896,41 @@ export default function Today() {
     } catch { return null; }
   }
 
-  // Builds the entry pad's starting values from the most recent set for this
+  // Builds the entry pad's ghost values from the most recent set for this
   // exercise — today's last if present, otherwise the historical last — shaped
   // for the exercise's track type (weight/reps, time, or distance+time).
-  function getPrefillFor(name) {
+  // Shown as faded placeholder numbers, never logged directly.
+  function getGhostFor(name) {
     const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
     const histLast = exerciseStats[name]?.lastSet;
     return prefillFromSet(todayLast || histLast, trackTypeOf(name));
   }
 
   // Opens the full-screen log sheet for an exercise, fetching its stats first
-  // so the entry pad can pre-fill from history.
+  // so the entry pad can show last time's numbers as a ghost reference.
   async function openLog(name) {
     if (!exerciseStats[name]) await fetchExerciseStats(name);
-    setOpenExercise(name);
+    const next = new URLSearchParams(searchParams);
+    next.set('exercise', name);
+    // Push when opening fresh (so the back gesture closes the sheet); replace
+    // when the sheet is already open (prev/next arrows) so stepping through
+    // exercises doesn't stack up history entries.
+    setSearchParams(next, { replace: !!openExercise });
   }
+
+  function closeLog() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('exercise');
+    setSearchParams(next, { replace: true });
+  }
+
+  // When the sheet opens straight from the URL (back from History, a refresh),
+  // its stats may not be loaded yet — fetch them so the ghost values and
+  // "vs last" comparison appear.
+  useEffect(() => {
+    if (user && openExercise && !exerciseStats[openExercise]) fetchExerciseStats(openExercise);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, openExercise]);
 
   async function handlePickExercise(name, typeForNew, categoryForNew = '') {
     setShowSheet(false);
@@ -1232,14 +1285,14 @@ export default function Today() {
             flashSetId={flashSetId}
             setNotes={setNotes}
             onSaveNote={saveSetNote}
-            prefill={getPrefillFor(openExercise)}
+            ghost={getGhostFor(openExercise)}
             saving={saving}
             onAddSet={(vals) => addSetFor(openExercise, vals)}
             onUpdateSet={(id, vals) => updateSetFor(id, vals)}
             onDeleteSet={handleDeleteSet}
             onCycleSetType={handleCycleSetType}
-            onViewHistory={() => navigate(`/exercises/${encodeURIComponent(openExercise)}`, { state: { from: `/today?date=${selectedDate}` } })}
-            onClose={() => setOpenExercise(null)}
+            onViewHistory={() => navigate(`/exercises/${encodeURIComponent(openExercise)}`, { state: { from: `/today?date=${selectedDate}&exercise=${encodeURIComponent(openExercise)}` } })}
+            onClose={closeLog}
             onPrev={onPrevExercise}
             onNext={onNextExercise}
           />

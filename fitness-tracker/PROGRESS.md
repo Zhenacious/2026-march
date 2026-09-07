@@ -4,7 +4,7 @@
 > and update it at the END of a session so next time picks up where this one left off.
 > Keep it short. If a section gets long, trim the oldest stuff.
 
-_Last updated: 2026-07-30_
+_Last updated: 2026-09-08_
 
 ## What this app is
 A personal React + Supabase fitness tracker. Log gym sessions (exercises, sets,
@@ -26,6 +26,11 @@ so they pick up their Chinese names (rows saved before the column existed have n
 
 ### Workout side
 - Today tab — log/edit/reorder sets for any date, search exercise library, quick-create.
+- (2026-09-08) Open exercise sheet lives in the URL (`/today?exercise=X`) — back
+  from History reopens it, back gesture closes it. Add Exercise picker remembers
+  the last muscle-group tab (`fittrack_last_muscle_tab` in localStorage). Entry
+  pad no longer pre-fills: last set shows as faded ghost placeholders, +/-
+  steppers seed from the ghost, Add Set disabled until a real value is entered.
 - Exercise library — add/edit/delete, filter by muscle group, AI auto-categorize
   (`api/categorize.js`, working — uses the Anthropic SDK).
 - Exercise History — e1RM chart + session-by-session history with inline edit.
