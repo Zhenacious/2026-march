@@ -30,7 +30,9 @@ so they pick up their Chinese names (rows saved before the column existed have n
   from History reopens it, back gesture closes it. Add Exercise picker remembers
   the last muscle-group tab (`fittrack_last_muscle_tab` in localStorage). Entry
   pad no longer pre-fills: last set shows as faded ghost placeholders, +/-
-  steppers seed from the ghost, Add Set disabled until a real value is entered.
+  steppers seed from the ghost, and Add Set on an empty pad logs the ghost
+  values (one-tap repeat of last set — user explicitly wants this). Tapping a
+  value field selects its contents (selectOnFocus) so typing replaces it.
 - Exercise library — add/edit/delete, filter by muscle group, AI auto-categorize
   (`api/categorize.js`, working — uses the Anthropic SDK).
 - Exercise History — e1RM chart + session-by-session history with inline edit.

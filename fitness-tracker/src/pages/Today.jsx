@@ -56,6 +56,15 @@ function commitOnEnter(e) {
   }
 }
 
+// Tapping a value field selects its whole contents, so typing replaces the
+// old number straight away — no moving the cursor or deleting digits first.
+// (Deferred a frame so the tap that focused the field doesn't immediately
+// collapse the selection.)
+function selectOnFocus(e) {
+  const el = e.target;
+  requestAnimationFrame(() => { try { el.select(); } catch { /* ignore */ } });
+}
+
 // One labelled +/- stepper with a numeric input in the middle. `ghost` is
 // last time's value: shown as a faded placeholder while the field is empty,
 // and used as the base the first time +/- is tapped.
@@ -74,7 +83,7 @@ function Stepper({ label, value, onChange, step = 1, min = 0, max, ghost }) {
       <div className="flex items-center gap-1.5">
         <button type="button" onClick={() => adjust(-step)}
           className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-        <input type="number" inputMode="numeric" value={value}
+        <input type="number" inputMode="numeric" value={value} onFocus={selectOnFocus}
           onChange={(e) => onChange(e.target.value)} placeholder={ghost || '0'}
           className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
         <button type="button" onClick={() => adjust(step)}
@@ -101,7 +110,7 @@ function DistanceField({ values, onChange, ghost }) {
     <div>
       <p className="text-[10px] text-zinc-500 text-center mb-1">Distance</p>
       <div className="flex items-center gap-1.5">
-        <input type="number" inputMode="decimal" value={values.distance}
+        <input type="number" inputMode="decimal" value={values.distance} onFocus={selectOnFocus}
           onChange={(e) => onChange({ ...values, distance: e.target.value })} placeholder={ghost?.distance || '0'}
           className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost?.distance ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
         <select value={values.distanceUnit}
@@ -145,7 +154,7 @@ function StepperPair({ values, onChange, ghost }) {
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, -2.5) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-          <input type="number" inputMode="decimal" value={values.weightKg}
+          <input type="number" inputMode="decimal" value={values.weightKg} onFocus={selectOnFocus}
             onChange={(e) => onChange({ ...values, weightKg: e.target.value })} placeholder={ghost?.weightKg || '0'}
             className={inputClass(!!ghost?.weightKg)} />
           <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, 2.5) })}
@@ -157,7 +166,7 @@ function StepperPair({ values, onChange, ghost }) {
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, -1) })}
             className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-          <input type="number" inputMode="numeric" value={values.reps}
+          <input type="number" inputMode="numeric" value={values.reps} onFocus={selectOnFocus}
             onChange={(e) => onChange({ ...values, reps: e.target.value })} placeholder={ghost?.reps || '0'}
             className={inputClass(!!ghost?.reps)} />
           <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, 1) })}
@@ -210,14 +219,19 @@ function ExerciseLogSheet({
     setTappedSetId(null);
   }, [name]);
 
-  // Ghost values are references only — Add Set stays disabled until you've
-  // entered (or stepped to) at least one real value, so they can't be logged
-  // by accident.
+  // Whether the entry pad has any real (typed or stepped) values. If not,
+  // Add Set logs the ghost values — one tap repeats last time's set.
   const hasEntry = trackType === 'time'
     ? entry.h !== '' || entry.m !== '' || entry.s !== ''
     : trackType === 'distance_time'
       ? entry.distance !== '' || entry.h !== '' || entry.m !== '' || entry.s !== ''
       : entry.weightKg !== '' || entry.reps !== '';
+
+  function handleAddSet() {
+    // Empty pad = repeat last time (the ghost); the set-type pill you picked
+    // still applies either way.
+    onAddSet(hasEntry ? entry : { ...(ghost || emptyValues()), setType: entry.setType });
+  }
 
   const todayVol = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
   const lastVol = stats?.lastSessionVolume;
@@ -366,7 +380,7 @@ function ExerciseLogSheet({
                 <SetTypePills value={entry.setType} onChange={(v) => setEntry((e) => ({ ...e, setType: v }))} />
               </div>
             )}
-            <button onClick={() => onAddSet(entry)} disabled={saving || !hasEntry}
+            <button onClick={handleAddSet} disabled={saving}
               className={`bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${isWeight ? 'flex-shrink-0' : 'flex-1'}`}>
               <Plus className="w-4 h-4" /> {saving ? 'Adding…' : 'Add Set'}
             </button>
