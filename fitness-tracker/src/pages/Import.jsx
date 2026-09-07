@@ -118,6 +118,18 @@ export default function Import() {
     return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   }
 
+  const SET_TYPE_LABELS = { normal: 'Normal', dropset: 'Drop Set', superset: 'Super Set' };
+
+  function loadLocalNotes() {
+    let setNotes = {};
+    let sessionNotes = {};
+    try { setNotes = JSON.parse(localStorage.getItem('fittrack_set_notes') || '{}'); } catch { setNotes = {}; }
+    try { sessionNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}'); } catch { sessionNotes = {}; }
+    return { setNotes, sessionNotes };
+  }
+
+  const EXPORT_HEADER = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time,Set Type,Set Note,Session Note';
+
   async function handleExport() {
     setExporting(true);
     setExportError('');
@@ -140,7 +152,7 @@ export default function Import() {
 
       const workoutIds = (workouts || []).map((w) => w.id);
       if (workoutIds.length === 0) {
-        const csv = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time\n';
+        const csv = EXPORT_HEADER + '\n';
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -160,7 +172,7 @@ export default function Import() {
         const chunk = workoutIds.slice(i, i + BATCH);
         const { data: batchSets, error: sErr } = await supabase
           .from('workout_sets')
-          .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order')
+          .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order, set_type')
           .in('workout_id', chunk);
         if (sErr) throw new Error('Failed to fetch sets: ' + sErr.message);
         allSets = allSets.concat(batchSets || []);
@@ -187,10 +199,12 @@ export default function Import() {
 
       const escape = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
-      const header = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time';
-      const rows = sorted.map((s) =>
-        [
-          workoutDateMap[s.workout_id] || '',
+      const { setNotes, sessionNotes } = loadLocalNotes();
+
+      const rows = sorted.map((s) => {
+        const date = workoutDateMap[s.workout_id] || '';
+        return [
+          date,
           escape(s.exercise_name),
           escape(categoryMap[s.exercise_name] ?? ''),
           s.weight_kg ?? 0,
@@ -198,10 +212,13 @@ export default function Import() {
           s.distance ?? 0,
           s.distance_unit || '',
           secondsToTime(s.duration_seconds),
-        ].join(',')
-      );
+          SET_TYPE_LABELS[s.set_type] || 'Normal',
+          escape(setNotes[s.id] || ''),
+          escape(sessionNotes[date] || ''),
+        ].join(',');
+      });
 
-      const csv = [header, ...rows].join('\n');
+      const csv = [EXPORT_HEADER, ...rows].join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

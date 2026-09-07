@@ -5,7 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { Trophy, TrendingUp } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
 import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
+import { formatDuration } from '../lib/trackTypes';
 import { format, parseISO } from 'date-fns';
+
+const UNIT_TO_METERS = { km: 1000, mi: 1609.34, m: 1 };
 
 export default function PersonalRecords() {
   const { user } = useAuth();
@@ -33,47 +36,79 @@ export default function PersonalRecords() {
 
         const { data: sets } = await supabase
           .from('workout_sets')
-          .select('workout_id, exercise_name, weight_kg, reps')
+          .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds')
           .in('workout_id', workoutIds);
 
         if (!sets || sets.length === 0) { setRecords([]); return; }
 
         const { data: exercises } = await supabase
           .from('exercises')
-          .select('name, category')
+          .select('name, category, track_type')
           .eq('user_id', user.id);
 
         const catMap = {};
-        (exercises || []).forEach((ex) => { catMap[ex.name.toLowerCase()] = ex.category || ''; });
+        const trackMap = {};
+        (exercises || []).forEach((ex) => {
+          catMap[ex.name.toLowerCase()] = ex.category || '';
+          trackMap[ex.name.toLowerCase()] = ex.track_type || 'weight_reps';
+        });
 
-        // Calculate best e1RM, best weight, best reps per exercise
+        // Calculate best e1RM/weight/reps (weight & reps exercises) and best
+        // duration/distance (time and distance exercises) per exercise
         const byExercise = {};
         sets.forEach((s) => {
           const date = workoutDateMap[s.workout_id];
           if (!date) return;
           const name = s.exercise_name;
           if (!byExercise[name]) {
-            byExercise[name] = { bestE1RM: 0, bestWeight: 0, bestReps: 0, bestE1RMDate: null };
+            byExercise[name] = {
+              bestE1RM: 0, bestWeight: 0, bestReps: 0, bestE1RMDate: null,
+              bestDuration: 0, bestDurationDate: null,
+              bestDistance: 0, bestDistanceUnit: null, bestDistanceMeters: 0, bestDistanceDate: null,
+            };
           }
+          const rec = byExercise[name];
+
           const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
           const reps = s.reps || 0;
           const e1rm = reps > 0 ? Math.round(effW * (1 + reps / 30) * 10) / 10 : effW;
-          if (e1rm > byExercise[name].bestE1RM) {
-            byExercise[name].bestE1RM = e1rm;
-            byExercise[name].bestE1RMDate = date;
+          if (e1rm > rec.bestE1RM) {
+            rec.bestE1RM = e1rm;
+            rec.bestE1RMDate = date;
           }
-          if (effW > byExercise[name].bestWeight) byExercise[name].bestWeight = effW;
-          if (reps > byExercise[name].bestReps) byExercise[name].bestReps = reps;
+          if (effW > rec.bestWeight) rec.bestWeight = effW;
+          if (reps > rec.bestReps) rec.bestReps = reps;
+
+          const duration = s.duration_seconds || 0;
+          if (duration > rec.bestDuration) {
+            rec.bestDuration = duration;
+            rec.bestDurationDate = date;
+          }
+
+          const distance = s.distance || 0;
+          const unit = s.distance_unit || 'km';
+          const distanceMeters = distance * (UNIT_TO_METERS[unit] || 1000);
+          if (distanceMeters > rec.bestDistanceMeters) {
+            rec.bestDistanceMeters = distanceMeters;
+            rec.bestDistance = distance;
+            rec.bestDistanceUnit = unit;
+            rec.bestDistanceDate = date;
+          }
         });
 
         const result = Object.entries(byExercise)
           .map(([name, rec]) => ({
             name,
             category: catMap[name.toLowerCase()] || '',
+            trackType: trackMap[name.toLowerCase()] || 'weight_reps',
             ...rec,
           }))
-          .filter((r) => r.bestE1RM > 0)
-          .sort((a, b) => b.bestE1RM - a.bestE1RM);
+          .filter((r) => r.bestE1RM > 0 || r.bestDuration > 0 || r.bestDistanceMeters > 0)
+          .sort((a, b) => {
+            if (b.bestE1RM !== a.bestE1RM) return b.bestE1RM - a.bestE1RM;
+            if (b.bestDuration !== a.bestDuration) return b.bestDuration - a.bestDuration;
+            return b.bestDistanceMeters - a.bestDistanceMeters;
+          });
 
         setRecords(result);
       } finally {
@@ -142,29 +177,54 @@ export default function PersonalRecords() {
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-3 ml-7">
-                  <div>
-                    <p className="text-zinc-600 text-xs mb-0.5">Est. 1RM</p>
-                    <p className="text-amber-400 font-bold text-base leading-none">
-                      {rec.bestE1RM}<span className="text-zinc-500 text-xs font-normal ml-0.5">kg</span>
-                    </p>
+                {rec.trackType === 'time' ? (
+                  <div className="ml-7">
+                    <p className="text-zinc-600 text-xs mb-0.5">Best time</p>
+                    <p className="text-amber-400 font-bold text-base leading-none">{formatDuration(rec.bestDuration)}</p>
                   </div>
-                  <div>
-                    <p className="text-zinc-600 text-xs mb-0.5">Best weight</p>
-                    <p className="text-zinc-200 font-semibold text-base leading-none">
-                      {rec.bestWeight}<span className="text-zinc-500 text-xs font-normal ml-0.5">kg</span>
-                    </p>
+                ) : rec.trackType === 'distance_time' ? (
+                  <div className="grid grid-cols-2 gap-3 ml-7">
+                    <div>
+                      <p className="text-zinc-600 text-xs mb-0.5">Best distance</p>
+                      <p className="text-amber-400 font-bold text-base leading-none">
+                        {rec.bestDistance}<span className="text-zinc-500 text-xs font-normal ml-0.5">{rec.bestDistanceUnit}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-600 text-xs mb-0.5">Best time</p>
+                      <p className="text-zinc-200 font-semibold text-base leading-none">{formatDuration(rec.bestDuration)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-zinc-600 text-xs mb-0.5">Most reps</p>
-                    <p className="text-zinc-200 font-semibold text-base leading-none">
-                      {rec.bestReps}<span className="text-zinc-500 text-xs font-normal ml-0.5">reps</span>
-                    </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3 ml-7">
+                    <div>
+                      <p className="text-zinc-600 text-xs mb-0.5">Est. 1RM</p>
+                      <p className="text-amber-400 font-bold text-base leading-none">
+                        {rec.bestE1RM}<span className="text-zinc-500 text-xs font-normal ml-0.5">kg</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-600 text-xs mb-0.5">Best weight</p>
+                      <p className="text-zinc-200 font-semibold text-base leading-none">
+                        {rec.bestWeight}<span className="text-zinc-500 text-xs font-normal ml-0.5">kg</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-600 text-xs mb-0.5">Most reps</p>
+                      <p className="text-zinc-200 font-semibold text-base leading-none">
+                        {rec.bestReps}<span className="text-zinc-500 text-xs font-normal ml-0.5">reps</span>
+                      </p>
+                    </div>
                   </div>
-                </div>
-                {rec.bestE1RMDate && (
-                  <p className="text-zinc-700 text-xs mt-2 ml-7">{format(parseISO(rec.bestE1RMDate), 'MMM d, yyyy')}</p>
                 )}
+                {(() => {
+                  const prDate = rec.trackType === 'time' ? rec.bestDurationDate
+                    : rec.trackType === 'distance_time' ? (rec.bestDurationDate || rec.bestDistanceDate)
+                    : rec.bestE1RMDate;
+                  return prDate && (
+                    <p className="text-zinc-700 text-xs mt-2 ml-7">{format(parseISO(prDate), 'MMM d, yyyy')}</p>
+                  );
+                })()}
               </button>
             );
           })}
