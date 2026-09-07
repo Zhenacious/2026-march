@@ -4,7 +4,9 @@ import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { loadBodyWeights, saveBodyWeights } from '../lib/bodyWeight';
+import { upsertBodyWeight, deleteBodyWeight } from '../lib/bodyWeight';
+import { useBodyWeights } from '../hooks/useBodyWeights';
+import { useAuth } from '../contexts/AuthContext';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -19,7 +21,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function BodyWeightTracker() {
-  const [weights, setWeights] = useState(() => loadBodyWeights());
+  const { user } = useAuth();
+  const [weights, setWeights] = useBodyWeights();
+  const [saving, setSaving] = useState(false);
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [weightInput, setWeightInput] = useState('');
   const [error, setError] = useState('');
@@ -40,26 +44,31 @@ export default function BodyWeightTracker() {
       }));
   }, [weights]);
 
-  function handleAdd() {
+  async function handleAdd() {
     setError('');
     const kg = parseFloat(weightInput);
     if (!kg || kg <= 0 || kg > 500) { setError('Enter a valid weight (kg).'); return; }
     if (!date) { setError('Select a date.'); return; }
 
-    // Upsert — replace any existing entry for that date
-    const updated = [
-      ...weights.filter((e) => e.date !== date),
-      { date, weight_kg: kg },
-    ];
-    saveBodyWeights(updated);
-    setWeights(updated);
-    setWeightInput('');
+    // Saves to the database; one entry per day, so logging the same day again replaces it
+    setSaving(true);
+    try {
+      setWeights(await upsertBodyWeight(user.id, date, kg));
+      setWeightInput('');
+    } catch (err) {
+      setError(`Could not save: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete(entryDate) {
-    const updated = weights.filter((e) => e.date !== entryDate);
-    saveBodyWeights(updated);
-    setWeights(updated);
+  async function handleDelete(entryDate) {
+    setError('');
+    try {
+      setWeights(await deleteBodyWeight(user.id, entryDate));
+    } catch (err) {
+      setError(`Could not delete: ${err.message}`);
+    }
   }
 
   return (
@@ -113,7 +122,8 @@ export default function BodyWeightTracker() {
           </div>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            disabled={saving}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
             Log

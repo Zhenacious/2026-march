@@ -10,10 +10,13 @@
     "preview": "vite preview",
     "test:food": "node scripts/test-food-math.mjs && node scripts/test-food-data.mjs",
     "migrate": "node scripts/migrate.mjs",
-    "migrate:status": "node scripts/migrate.mjs --status"
+    "migrate:status": "node scripts/migrate.mjs --status",
+    "mcp:dev": "node scripts/mcp-local.mjs",
+    "test:mcp": "node scripts/test-mcp.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/supabase-js": "^2.99.3",
     "@tailwindcss/vite": "^4.2.2",
     "@use-gesture/react": "^10.3.1",
@@ -29,6 +32,7 @@
     "recharts": "^3.8.0",
     "tailwindcss": "^4.2.2",
     "vite-plugin-pwa": "^1.3.0",
+    "zod": "^4.5.4",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

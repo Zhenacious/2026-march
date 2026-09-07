@@ -37,7 +37,25 @@ so they pick up their Chinese names (rows saved before the column existed have n
   (`api/categorize.js`, working — uses the Anthropic SDK).
 - Exercise History — e1RM chart + session-by-session history with inline edit.
 - Calendar, Personal Records, Body Weight tracker, FitNotes CSV import.
+- (2026-09-08) Body weight now lives in the database (`body_weights` table,
+  migration 012, applied) instead of localStorage. `useBodyWeights()` hook returns
+  the local cache instantly then refreshes from the DB; first load pushes any
+  localStorage-only entries up so nothing is lost.
 - Shared config in `src/lib/categories.js` (colours + muscle groups).
+
+### Athlete OS connector (built 2026-09-08)
+- Read-only MCP server at `api/mcp/[key].js` + `api/_athleteData.js`, so Claude
+  (claude.ai project / Claude Code) can pull training, food and weight data live.
+  Four tools: get_recent_workouts, get_exercise_history, get_food_log, get_weight_log.
+- Signs in as the user's own FitTrack login (RLS enforces single-user visibility);
+  key in the URL path; wrong key = 404. Full setup guide: `docs/athlete-os-connector.md`.
+- Local test: `npm run mcp:dev` then `npm run test:mcp`. Verified initialize,
+  tools/list and error handling locally; **tool data calls not yet verified** because
+  FITTRACK_EMAIL/PASSWORD/MCP_ACCESS_KEY are not set anywhere yet (user must add
+  them in Vercel and, for local tests, `.env`).
+- Data volume at build time: 263 workouts / 4,681 sets since 2023-07, 15 sessions
+  in the last 30 days, only 1 food entry, 0 body weights in the DB (they were on
+  the phone's localStorage; they sync up next time the Body Weight page opens).
 
 ### Food side (built 2026-07-29/30 — the big piece of recent work)
 - **Lives on the Today page** behind a `Workout | Food` tab switcher (`/today?tab=food`).
@@ -109,6 +127,9 @@ past days. That was a deliberate choice (confirmed with the user), not an accide
   a Progress page, and describes the app as workout-only with no mention of food).
 
 ## Next ideas (rough priority order)
+0. Finish the Athlete OS connector setup: env vars in Vercel, redeploy, run
+   `node scripts/test-mcp.mjs <deployed URL>`, add the connector in claude.ai.
+   Open the Body Weight page once on the phone so old entries sync to the DB.
 1. Test the camera scanner on a phone; test the Add Food modal end to end.
 2. Refresh `CLAUDE.md` — it predates the entire food feature.
 3. **Saved meal combinations** ("my usual breakfast" = several foods logged in one

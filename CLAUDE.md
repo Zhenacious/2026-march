@@ -40,7 +40,15 @@ A React + Supabase fitness tracker app located in `fitness-tracker/`.
 
 - `workouts` — `id, user_id, date`
 - `workout_sets` — `id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order, set_type`
-- `exercises` — `id, user_id, name, category`
+- `exercises` — `id, user_id, name, category, track_type`
+- `body_weights` — `id, user_id, date, weight_kg` (one per user per day)
+- Food tables (`food_entries`, `custom_foods`, `user_settings`) — see `fitness-tracker/PROGRESS.md`
+
+Schema changes go in `fitness-tracker/supabase/migrations/` and are applied with `npm run migrate`.
+
+## Athlete OS connector
+
+`fitness-tracker/api/mcp/[key].js` is a read-only MCP server so Claude (claude.ai project or Claude Code) can pull workouts, exercise history, food and body weight live. Setup and the text to paste into the Athlete OS project live in `docs/athlete-os-connector.md`. Keep it read-only; never add a tool that writes.
 
 ---
 

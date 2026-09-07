@@ -4,7 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, TrendingUp } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
-import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
+import { effectiveWeight } from '../lib/bodyWeight';
+import { useBodyWeights } from '../hooks/useBodyWeights';
 import { formatDuration } from '../lib/trackTypes';
 import { format, parseISO } from 'date-fns';
 
@@ -16,7 +17,7 @@ export default function PersonalRecords() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeGroup, setActiveGroup] = useState('All');
-  const [bodyWeights] = useState(() => loadBodyWeights());
+  const [bodyWeights] = useBodyWeights();
 
   useEffect(() => {
     async function fetchRecords() {
@@ -116,7 +117,7 @@ export default function PersonalRecords() {
       }
     }
     fetchRecords();
-  }, [user]);
+  }, [user, bodyWeights]);
 
   const filtered = useMemo(() => {
     const group = MUSCLE_GROUPS.find((g) => g.label === activeGroup);

@@ -3,7 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
+import { effectiveWeight } from '../lib/bodyWeight';
+import { useBodyWeights } from '../hooks/useBodyWeights';
 import { format, parseISO } from 'date-fns';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -59,7 +60,7 @@ export default function ExerciseHistory() {
   const [timeRange, setTimeRange] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [bodyWeights] = useState(() => loadBodyWeights());
+  const [bodyWeights] = useBodyWeights();
 
   // Inline edit state (sets)
   const [editingSetId, setEditingSetId] = useState(null);

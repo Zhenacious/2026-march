@@ -15,7 +15,8 @@ import {
 } from 'recharts';
 import { TrendingUp, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { loadBodyWeights, effectiveWeight } from '../lib/bodyWeight';
+import { effectiveWeight } from '../lib/bodyWeight';
+import { useBodyWeights } from '../hooks/useBodyWeights';
 import { format, parseISO } from 'date-fns';
 import { MUSCLE_GROUPS } from '../lib/categories';
 import { DEFAULT_TRACK_TYPE, trackTypeLabel } from '../lib/trackTypes';
@@ -51,7 +52,7 @@ export default function Progress() {
   );
   const [timeScale, setTimeScale] = useState('all');
   const [chartData, setChartData] = useState([]);
-  const [bodyWeights] = useState(() => loadBodyWeights());
+  const [bodyWeights] = useBodyWeights();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
