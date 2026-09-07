@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runs the Athlete OS connector (api/mcp/[key].js) on your own computer so it
+ * Runs the Athlete OS connector (api/mcp.js) on your own computer so it
  * can be tested without deploying. Reads the same variables from
  * fitness-tracker/.env that Vercel reads from its environment settings.
  *
@@ -19,7 +19,7 @@ if (!process.env.MCP_ACCESS_KEY) {
   console.log('MCP_ACCESS_KEY not set; using "local-dev-key" for this run.');
 }
 
-const { default: handler } = await import(pathToFileURL(path.join(ROOT, 'api', 'mcp', '[key].js')).href);
+const { default: handler } = await import(pathToFileURL(path.join(ROOT, 'api', 'mcp.js')).href);
 const PORT = Number(process.env.MCP_PORT || 8787);
 
 function readJson(req) {

@@ -1,4 +1,4 @@
-// Read-only data access for the Athlete OS connector (api/mcp/[key].js).
+// Read-only data access for the Athlete OS connector (api/mcp.js).
 //
 // Signs in to Supabase as the FitTrack user with the email/password from the
 // environment, so Supabase's row-level security guarantees the connector can

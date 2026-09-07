@@ -48,7 +48,7 @@ Schema changes go in `fitness-tracker/supabase/migrations/` and are applied with
 
 ## Athlete OS connector
 
-`fitness-tracker/api/mcp/[key].js` is a read-only MCP server so Claude (claude.ai project or Claude Code) can pull workouts, exercise history, food and body weight live. Setup and the text to paste into the Athlete OS project live in `docs/athlete-os-connector.md`. Keep it read-only; never add a tool that writes.
+`fitness-tracker/api/mcp.js` is a read-only MCP server so Claude (claude.ai project or Claude Code) can pull workouts, exercise history, food and body weight live. Setup and the text to paste into the Athlete OS project live in `docs/athlete-os-connector.md`. Keep it read-only; never add a tool that writes.
 
 ---
 

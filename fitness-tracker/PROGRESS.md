@@ -44,7 +44,7 @@ so they pick up their Chinese names (rows saved before the column existed have n
 - Shared config in `src/lib/categories.js` (colours + muscle groups).
 
 ### Athlete OS connector (built 2026-09-08)
-- Read-only MCP server at `api/mcp/[key].js` + `api/_athleteData.js`, so Claude
+- Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
   (claude.ai project / Claude Code) can pull training, food and weight data live.
   Four tools: get_recent_workouts, get_exercise_history, get_food_log, get_weight_log.
 - Signs in as the user's own FitTrack login (RLS enforces single-user visibility);

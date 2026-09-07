@@ -5,7 +5,7 @@ Claude Desktop) can pull your training, food and body weight data live from the
 database whenever you ask a coaching question. Nothing is copied or duplicated,
 and the connector has no way to write anything.
 
-Code: `fitness-tracker/api/mcp/[key].js` (the endpoint) and
+Code: `fitness-tracker/api/mcp.js` (the endpoint) and
 `fitness-tracker/api/_athleteData.js` (the queries).
 
 ## What Claude can call
