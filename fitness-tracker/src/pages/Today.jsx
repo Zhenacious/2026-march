@@ -870,7 +870,7 @@ export default function Today() {
 
       const workoutDateMap = Object.fromEntries(workouts.map((w) => [w.id, w.date]));
       const { data: historySets } = await supabase
-        .from('workout_sets').select('workout_id, weight_kg, reps, set_type')
+        .from('workout_sets').select('workout_id, weight_kg, reps, distance, distance_unit, duration_seconds, set_type')
         .in('workout_id', workouts.map((w) => w.id))
         .eq('exercise_name', name);
 
@@ -882,8 +882,6 @@ export default function Today() {
         .sort((a, b) => b.date.localeCompare(a.date));
 
       if (withDates.length === 0) return null;
-
-      const lastSet = withDates[0];
 
       let bestE1RM = 0;
       withDates.forEach((s) => {
@@ -903,6 +901,20 @@ export default function Today() {
       const lastSessionVolume = lastSessionDate
         ? byDate[lastSessionDate].reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0)
         : 0;
+
+      // The ghost reference is the last session's top (max-effort) set, not
+      // whichever set came first — that's usually a warmup. Effort is e1RM
+      // for weight exercises; distance then duration for cardio-type ones
+      // (all sets of one exercise share a track type, so scores compare fairly).
+      const effortScore = (s) => {
+        if (s.weight_kg > 0 && s.reps > 0) return s.weight_kg * (1 + s.reps / 30);
+        if (s.distance > 0) return s.distance * 1e6 + (s.duration_seconds || 0);
+        return s.duration_seconds || 0;
+      };
+      const lastSet = byDate[lastSessionDate].reduce(
+        (best, s) => (effortScore(s) > effortScore(best) ? s : best),
+        byDate[lastSessionDate][0]
+      );
 
       const stats = { lastSet, bestE1RM, lastSessionVolume, lastSessionDate };
       setExerciseStats((prev) => ({ ...prev, [name]: stats }));
