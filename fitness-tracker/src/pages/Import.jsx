@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { parseFitNotesCSV } from '../lib/fitnotes';
 import { normalizeCategory } from '../lib/categories';
@@ -16,6 +17,7 @@ export default function Import() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [exportRange, setExportRange] = useState('all');
 
   async function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -130,34 +132,42 @@ export default function Import() {
 
   const EXPORT_HEADER = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time,Set Type,Set Note,Session Note';
 
+  // Export ranges. "months: null" means everything ever logged.
+  const EXPORT_RANGES = [
+    { value: 'all', label: 'Lifetime', months: null },
+    { value: '1y', label: 'Last year', months: 12 },
+    { value: '6m', label: 'Last 6 months', months: 6 },
+    { value: '3m', label: 'Last 3 months', months: 3 },
+  ];
+
+  function exportSinceDate(rangeValue) {
+    const range = EXPORT_RANGES.find((r) => r.value === rangeValue);
+    if (!range || range.months === null) return null;
+    const d = new Date();
+    d.setMonth(d.getMonth() - range.months);
+    return d.toISOString().slice(0, 10);
+  }
+
   async function handleExport() {
     setExporting(true);
     setExportError('');
     try {
-      const PAGE = 1000;
-      let workouts = [];
-      let offset = 0;
-      while (true) {
-        const { data: batch, error: wErr } = await supabase
-          .from('workouts')
-          .select('id, date')
-          .eq('user_id', user.id)
-          .order('date')
-          .range(offset, offset + PAGE - 1);
-        if (wErr) throw new Error('Failed to fetch workouts: ' + wErr.message);
-        workouts = workouts.concat(batch || []);
-        if ((batch || []).length < PAGE) break;
-        offset += PAGE;
-      }
+      const since = exportSinceDate(exportRange);
+      const workouts = await fetchAllRows(() => {
+        let q = supabase.from('workouts').select('id, date').eq('user_id', user.id).order('date');
+        if (since) q = q.gte('date', since);
+        return q;
+      });
 
       const workoutIds = (workouts || []).map((w) => w.id);
+      const exportFileName = exportRange === 'all' ? 'fittrack-export.csv' : `fittrack-export-${exportRange}.csv`;
       if (workoutIds.length === 0) {
         const csv = EXPORT_HEADER + '\n';
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'fittrack-export.csv';
+        a.download = exportFileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -166,16 +176,17 @@ export default function Import() {
         return;
       }
 
-      const BATCH = 200;
+      // Ask for sets a few workouts at a time (keeps the request URL short) and
+      // page through each answer, since Supabase returns at most 1000 rows per call.
+      const BATCH = 100;
       let allSets = [];
       for (let i = 0; i < workoutIds.length; i += BATCH) {
         const chunk = workoutIds.slice(i, i + BATCH);
-        const { data: batchSets, error: sErr } = await supabase
+        const batchSets = await fetchAllRows(() => supabase
           .from('workout_sets')
           .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order, set_type')
-          .in('workout_id', chunk);
-        if (sErr) throw new Error('Failed to fetch sets: ' + sErr.message);
-        allSets = allSets.concat(batchSets || []);
+          .in('workout_id', chunk));
+        allSets = allSets.concat(batchSets);
       }
 
       const { data: exercises, error: eErr } = await supabase
@@ -223,7 +234,7 @@ export default function Import() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'fittrack-export.csv';
+      a.download = exportFileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -368,9 +379,26 @@ export default function Import() {
       <hr className="border-zinc-800 my-2" />
 
       <h2 className="text-xl font-bold text-zinc-100 mb-1 mt-6">Export Your Data</h2>
-      <p className="text-zinc-400 text-sm mb-6">
-        Download all your workout data as a CSV file. Works with FitNotes and spreadsheet apps.
+      <p className="text-zinc-400 text-sm mb-4">
+        Download your workout data as a CSV file. Works with FitNotes and spreadsheet apps.
       </p>
+
+      <div className="flex gap-1.5 flex-wrap mb-4">
+        {EXPORT_RANGES.map((r) => (
+          <button
+            key={r.value}
+            type="button"
+            onClick={() => setExportRange(r.value)}
+            className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+              exportRange === r.value
+                ? 'bg-teal-600 text-white border-teal-600'
+                : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
 
       {exportError && (
         <div className="flex items-start gap-3 bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">

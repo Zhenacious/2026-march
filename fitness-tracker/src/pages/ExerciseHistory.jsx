@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { effectiveWeight } from '../lib/bodyWeight';
@@ -143,13 +144,12 @@ export default function ExerciseHistory() {
         workouts.forEach((w) => { workoutDateMap[w.id] = w.date; });
 
         // Fetch all sets for this exercise
-        const { data: sets, error: sErr } = await supabase
+        const sets = await fetchAllRows(() => supabase
           .from('workout_sets')
           .select('*')
           .in('workout_id', workoutIds)
           .eq('exercise_name', exerciseName)
-          .order('set_order');
-        if (sErr) throw sErr;
+          .order('set_order'));
         if (!sets || sets.length === 0) { setSessions([]); return; }
 
         // Group sets by workout date

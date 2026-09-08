@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, TrendingUp } from 'lucide-react';
@@ -35,10 +36,10 @@ export default function PersonalRecords() {
         workouts.forEach((w) => { workoutDateMap[w.id] = w.date; });
         const workoutIds = workouts.map((w) => w.id);
 
-        const { data: sets } = await supabase
+        const sets = await fetchAllRows(() => supabase
           .from('workout_sets')
-          .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds')
-          .in('workout_id', workoutIds);
+          .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds')
+          .in('workout_id', workoutIds));
 
         if (!sets || sets.length === 0) { setRecords([]); return; }
 

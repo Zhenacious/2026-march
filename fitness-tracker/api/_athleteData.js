@@ -97,6 +97,18 @@ export function formatSet(s) {
 
 function round1(n) { return Math.round(n * 10) / 10; }
 
+// Supabase caps each request at 1000 rows; page until a short page comes back.
+const PAGE = 1000;
+async function fetchAllRows(makeQuery) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await makeQuery().order('id').range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data || []));
+    if ((data || []).length < PAGE) return rows;
+  }
+}
+
 // ---- queries ----------------------------------------------------------------
 
 async function exerciseCategories(client, userId) {
@@ -145,13 +157,11 @@ export async function getRecentWorkouts({ days } = {}) {
   const ids = (workouts || []).map((w) => w.id);
   let sets = [];
   if (ids.length) {
-    const res = await client
+    sets = await fetchAllRows(() => client
       .from('workout_sets')
-      .select('workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order')
+      .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order')
       .in('workout_id', ids)
-      .order('set_order', { ascending: true });
-    if (res.error) throw new Error(res.error.message);
-    sets = res.data || [];
+      .order('set_order', { ascending: true }));
   }
   const catMap = await exerciseCategories(client, userId);
 
@@ -182,15 +192,12 @@ export async function getExerciseHistory({ exercise, sessions } = {}) {
   const limit = clampCount(sessions, 10, 100);
   const { client, userId } = await getClient();
 
-  const { data, error } = await client
+  const rows = await fetchAllRows(() => client
     .from('workout_sets')
-    .select('exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, workouts!inner(date, user_id)')
+    .select('id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, workouts!inner(date, user_id)')
     .eq('workouts.user_id', userId)
     .ilike('exercise_name', `%${q.replace(/[%_]/g, '')}%`)
-    .order('set_order', { ascending: true });
-  if (error) throw new Error(error.message);
-
-  const rows = data || [];
+    .order('set_order', { ascending: true }));
   const names = [...new Set(rows.map((r) => r.exercise_name))];
   if (names.length === 0) return { query: q, matches: [], message: 'No exercise matched.' };
 

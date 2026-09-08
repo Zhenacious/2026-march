@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Dumbbell, CalendarDays, BarChart3, Plus, Upload, Utensils, Flame, Trophy } from 'lucide-react';
@@ -44,11 +45,10 @@ export default function Dashboard() {
         let totalSets = 0;
         let mostFrequent = '—';
         if (workoutIds.length > 0) {
-          const { data: sets, error: sErr } = await supabase
+          const sets = await fetchAllRows(() => supabase
             .from('workout_sets')
             .select('id, exercise_name')
-            .in('workout_id', workoutIds);
-          if (sErr) throw sErr;
+            .in('workout_id', workoutIds));
           totalSets = sets?.length || 0;
           if (sets && sets.length > 0) {
             const freq = {};

@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { entryTotals } from '../lib/food';
 
@@ -89,9 +90,9 @@ export default function Trends() {
 
       const idToDate = {};
       (workouts || []).forEach((w) => { idToDate[w.id] = w.date; });
-      const { data: sets } = await supabase
-        .from('workout_sets').select('workout_id, weight_kg, reps')
-        .in('workout_id', ids);
+      const sets = await fetchAllRows(() => supabase
+        .from('workout_sets').select('id, workout_id, weight_kg, reps')
+        .in('workout_id', ids));
       if (cancelled) return;
 
       const byDate = {};

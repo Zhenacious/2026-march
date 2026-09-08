@@ -42,6 +42,11 @@ so they pick up their Chinese names (rows saved before the column existed have n
   the local cache instantly then refreshes from the DB; first load pushes any
   localStorage-only entries up so nothing is lost.
 - Shared config in `src/lib/categories.js` (colours + muscle groups).
+- (2026-09-09) **Supabase's 1000-rows-per-request cap** silently truncated the CSV
+  export (stopped mid-August), Personal Records, Dashboard totals and the connector.
+  `src/lib/fetchAll.js` (`fetchAllRows`) pages through results; use it for ANY
+  query that can return more than 1000 rows. Test: `node scripts/test-fetch-all.mjs`.
+  Export now offers Lifetime / Last year / 6 months / 3 months.
 
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
