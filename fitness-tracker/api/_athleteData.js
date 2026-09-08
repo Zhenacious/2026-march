@@ -19,8 +19,10 @@ export async function getClient() {
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.expiresAt - 60 > now) return cached;
 
-  const email = process.env.FITTRACK_EMAIL;
-  const password = process.env.FITTRACK_PASSWORD;
+  // Values pasted into a dashboard often pick up stray spaces or quote marks
+  const clean = (v) => String(v || '').trim().replace(/^["']|["']$/g, '');
+  const email = clean(process.env.FITTRACK_EMAIL);
+  const password = clean(process.env.FITTRACK_PASSWORD);
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error('Supabase URL / anon key are not set in the environment.');
   }
@@ -198,14 +200,23 @@ export async function getExerciseHistory({ exercise, sessions } = {}) {
     .eq('workouts.user_id', userId)
     .ilike('exercise_name', `%${q.replace(/[%_]/g, '')}%`)
     .order('set_order', { ascending: true }));
-  const names = [...new Set(rows.map((r) => r.exercise_name))];
+  // Count sessions per matching exercise name
+  const sessionsByName = new Map();
+  for (const r of rows) {
+    if (!sessionsByName.has(r.exercise_name)) sessionsByName.set(r.exercise_name, new Set());
+    sessionsByName.get(r.exercise_name).add(r.workouts.date);
+  }
+  const names = [...sessionsByName.keys()];
   if (names.length === 0) return { query: q, matches: [], message: 'No exercise matched.' };
 
-  // Exact name wins; otherwise a single fuzzy match; otherwise ask the caller to pick
-  let name = names.find((n) => n.toLowerCase() === q.toLowerCase());
-  if (!name && names.length === 1) name = names[0];
+  // Only auto-pick when the name is unambiguous. With several candidates, hand
+  // back the list (most-trained first) so the caller can choose the right one.
+  let name = names.length === 1 ? names[0] : null;
   if (!name) {
-    return { query: q, matches: names, message: 'Several exercises matched. Call again with the exact name.' };
+    const matches = names
+      .map((n) => ({ exercise: n, sessions: sessionsByName.get(n).size }))
+      .sort((a, b) => b.sessions - a.sessions);
+    return { query: q, matches, message: 'Several exercises matched. Call again with the exact name.' };
   }
 
   const catMap = await exerciseCategories(client, userId);
