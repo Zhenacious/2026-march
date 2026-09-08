@@ -54,10 +54,11 @@ so they pick up their Chinese names (rows saved before the column existed have n
   Four tools: get_recent_workouts, get_exercise_history, get_food_log, get_weight_log.
 - Signs in as the user's own FitTrack login (RLS enforces single-user visibility);
   key in the URL path; wrong key = 404. Full setup guide: `docs/athlete-os-connector.md`.
-- Local test: `npm run mcp:dev` then `npm run test:mcp`. Verified initialize,
-  tools/list and error handling locally; **tool data calls not yet verified** because
-  FITTRACK_EMAIL/PASSWORD/MCP_ACCESS_KEY are not set anywhere yet (user must add
-  them in Vercel and, for local tests, `.env`).
+- Local test: `npm run mcp:dev` then `npm run test:mcp`. Live test:
+  `node scripts/test-mcp.mjs https://dolphfittrack.vercel.app/api/mcp/<key>`.
+  (2026-09-09) **Verified live**: all four tools return real data from Vercel.
+  FITTRACK_EMAIL/PASSWORD/MCP_ACCESS_KEY are set in Vercel and in local `.env`.
+  Remaining: user registers the connector in claude.ai (guide step 4-5).
 - Data volume at build time: 263 workouts / 4,681 sets since 2023-07, 15 sessions
   in the last 30 days, only 1 food entry, 0 body weights in the DB (they were on
   the phone's localStorage; they sync up next time the Body Weight page opens).
