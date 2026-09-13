@@ -137,14 +137,6 @@ export default function Import() {
 
   const SET_TYPE_LABELS = { normal: 'Normal', dropset: 'Drop Set', superset: 'Super Set' };
 
-  function loadLocalNotes() {
-    let setNotes = {};
-    let sessionNotes = {};
-    try { setNotes = JSON.parse(localStorage.getItem('fittrack_set_notes') || '{}'); } catch { setNotes = {}; }
-    try { sessionNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}'); } catch { sessionNotes = {}; }
-    return { setNotes, sessionNotes };
-  }
-
   const EXPORT_HEADER = 'Date,Exercise,Category,Weight (kg),Reps,Distance,Distance Unit,Time,Set Type,Set Note,Session Note';
 
   // Export ranges. "months: null" means everything ever logged.
@@ -169,7 +161,7 @@ export default function Import() {
     try {
       const since = exportSinceDate(exportRange);
       const workouts = await fetchAllRows(() => {
-        let q = supabase.from('workouts').select('id, date').eq('user_id', user.id).order('date');
+        let q = supabase.from('workouts').select('id, date, notes').eq('user_id', user.id).order('date');
         if (since) q = q.gte('date', since);
         return q;
       });
@@ -199,7 +191,7 @@ export default function Import() {
         const chunk = workoutIds.slice(i, i + BATCH);
         const batchSets = await fetchAllRows(() => supabase
           .from('workout_sets')
-          .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order, set_type')
+          .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_order, set_type, notes')
           .in('workout_id', chunk));
         allSets = allSets.concat(batchSets);
       }
@@ -211,7 +203,8 @@ export default function Import() {
       if (eErr) throw new Error('Failed to fetch exercises: ' + eErr.message);
 
       const workoutDateMap = {};
-      (workouts || []).forEach((w) => { workoutDateMap[w.id] = w.date; });
+      const workoutNotesMap = {};
+      (workouts || []).forEach((w) => { workoutDateMap[w.id] = w.date; workoutNotesMap[w.id] = w.notes || ''; });
 
       const categoryMap = {};
       (exercises || []).forEach((e) => { categoryMap[e.name] = e.category || ''; });
@@ -225,8 +218,6 @@ export default function Import() {
 
       const escape = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
-      const { setNotes, sessionNotes } = loadLocalNotes();
-
       const rows = sorted.map((s) => {
         const date = workoutDateMap[s.workout_id] || '';
         return [
@@ -239,8 +230,8 @@ export default function Import() {
           s.distance_unit || '',
           secondsToTime(s.duration_seconds),
           SET_TYPE_LABELS[s.set_type] || 'Normal',
-          escape(setNotes[s.id] || ''),
-          escape(sessionNotes[date] || ''),
+          escape(s.notes || ''),
+          escape(workoutNotesMap[s.workout_id] || ''),
         ].join(',');
       });
 

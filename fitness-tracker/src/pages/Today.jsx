@@ -4,6 +4,7 @@ import TodayFood from '../components/TodayFood';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAll';
 import { friendlyDbError } from '../lib/foodEntries';
+import { migrateLocalNotes } from '../lib/notesMigration';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
@@ -709,19 +710,20 @@ export default function Today() {
     return lines[Math.floor(Math.random() * lines.length)];
   });
 
-  const [setNotes, setSetNotes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('fittrack_set_notes') || '{}'); }
-    catch { return {}; }
-  });
+  // Per-set notes come from the rows themselves (workout_sets.notes), so they
+  // show on every device and reach the export and the Athlete OS connector.
+  const setNotes = useMemo(
+    () => Object.fromEntries(sets.filter((s) => s.notes).map((s) => [s.id, s.notes])),
+    [sets]
+  );
 
-  function saveSetNote(setId, value) {
-    setSetNotes((prev) => {
-      const next = { ...prev };
-      if (value.trim()) next[setId] = value.trim();
-      else delete next[setId];
-      localStorage.setItem('fittrack_set_notes', JSON.stringify(next));
-      return next;
-    });
+  async function saveSetNote(setId, value) {
+    const notes = value.trim();
+    const current = sets.find((s) => s.id === setId)?.notes || '';
+    if (notes === current) return;
+    const { error: noteErr } = await supabase.from('workout_sets').update({ notes }).eq('id', setId);
+    if (noteErr) { setError(friendlyDbError(noteErr, 'this note')); return; }
+    setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, notes } : s)));
   }
 
   const [note, setNote] = useState('');
@@ -854,15 +856,15 @@ export default function Today() {
     statsRef.current = {};
     knownRef.current = new Set();
     setExerciseStats({});
-    try {
-      const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
-      const dateNote = allNotes[selectedDate] || '';
-      setNote(dateNote);
-      setNoteExpanded(!!dateNote);
-    } catch { setNote(''); setNoteExpanded(false); }
+    setNote('');
+    setNoteExpanded(false);
 
     (async () => {
       try {
+        // First visit on this device: push any notes still in localStorage
+        // up to the database (no-op afterwards).
+        await migrateLocalNotes(user.id);
+        if (cancelled) return;
         // One request: the day's workout row with its sets embedded
         const { data: workout, error: loadErr } = await supabase
           .from('workouts')
@@ -875,6 +877,9 @@ export default function Today() {
         if (cancelled) return;
         if (loadErr) throw loadErr;
         workoutIdRef.current = workout?.id || null;
+        const dateNote = workout?.notes || '';
+        setNote(dateNote);
+        setNoteExpanded(!!dateNote);
         const setsData = workout?.workout_sets || [];
         maxOrderRef.current = setsData.reduce((m, s) => Math.max(m, s.set_order || 0), 0);
         setSets(setsData);
@@ -1153,13 +1158,19 @@ export default function Today() {
     } catch (err) { console.error(err); }
   }
 
-  function handleSaveNote(value) {
+  // Session note lives on the day's workout row (workouts.notes). A note on a
+  // day with no sets yet creates the row; clearing a note on a day that has
+  // no row is a no-op.
+  async function handleSaveNote(value) {
+    const notes = value.trim();
     try {
-      const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
-      if (value.trim()) allNotes[selectedDate] = value.trim();
-      else delete allNotes[selectedDate];
-      localStorage.setItem('fittrack_notes', JSON.stringify(allNotes));
-    } catch { /* ignore */ }
+      if (!notes && !workoutIdRef.current) return;
+      const id = await ensureWorkout();
+      const { error: noteErr } = await supabase.from('workouts').update({ notes }).eq('id', id);
+      if (noteErr) throw noteErr;
+    } catch (err) {
+      setError(friendlyDbError(err, 'the session note'));
+    }
   }
 
   function handleLoadTemplate(template) {

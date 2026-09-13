@@ -94,6 +94,7 @@ export function formatSet(s) {
   if (s.duration_seconds > 0) parts.push(fmtDuration(s.duration_seconds));
   let out = parts.join(' / ') || '-';
   if (s.set_type && s.set_type !== 'normal') out += ` (${s.set_type})`;
+  if (s.notes) out += ` "${String(s.notes).trim()}"`;
   return out;
 }
 
@@ -161,7 +162,7 @@ export async function getRecentWorkouts({ days } = {}) {
   if (ids.length) {
     sets = await fetchAllRows(() => client
       .from('workout_sets')
-      .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order')
+      .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, notes')
       .in('workout_id', ids)
       .order('set_order', { ascending: true }));
   }
@@ -196,7 +197,7 @@ export async function getExerciseHistory({ exercise, sessions } = {}) {
 
   const rows = await fetchAllRows(() => client
     .from('workout_sets')
-    .select('id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, workouts!inner(date, user_id)')
+    .select('id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, notes, workouts!inner(date, user_id, notes)')
     .eq('workouts.user_id', userId)
     .ilike('exercise_name', `%${q.replace(/[%_]/g, '')}%`)
     .order('set_order', { ascending: true }));
@@ -246,7 +247,8 @@ export async function getExerciseHistory({ exercise, sessions } = {}) {
     all_time_best: allTimeBest || undefined,
     sessions: dates.slice(0, limit).map((d) => {
       const s = summariseExercise(name, byDate.get(d), catMap);
-      return { date: d, sets: s.sets, best_e1rm_kg: s.best_e1rm_kg, volume_kg: s.volume_kg };
+      const sessionNote = byDate.get(d)[0]?.workouts?.notes || undefined;
+      return { date: d, notes: sessionNote, sets: s.sets, best_e1rm_kg: s.best_e1rm_kg, volume_kg: s.volume_kg };
     }),
   };
 }
