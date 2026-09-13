@@ -69,8 +69,8 @@ so they pick up their Chinese names (rows saved before the column existed have n
   include both.
 - Deleted dead pages WorkoutLog.jsx and Progress.jsx. ESLint now has
   eslint-plugin-react's jsx-uses-vars (no more false "unused" errors).
-- Not done (optional in plan): ExerciseHistory's inline set editor still has
-  its own min/sec fields rather than reusing SetEntryFields.
+- ExerciseHistory's inline set editor now uses SetEntryFields too (same fields,
+  same value shape, same set-type pills).
 
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude

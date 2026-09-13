@@ -11,7 +11,8 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { CATEGORY_COLORS, CATEGORY_OPTIONS, categoryLabel } from '../lib/categories';
-import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration } from '../lib/trackTypes';
+import { TRACK_TYPES, DEFAULT_TRACK_TYPE, formatDuration, emptyValues, prefillFromSet, setPayloadFromValues } from '../lib/trackTypes';
+import SetEntryFields from '../components/SetEntryFields';
 import { TIME_RANGES, rangeCutoff, rangeDateFormat } from '../lib/timeRanges';
 
 // Friendly names for the page you came from, so the back button can say
@@ -65,7 +66,7 @@ export default function ExerciseHistory() {
 
   // Inline edit state (sets)
   const [editingSetId, setEditingSetId] = useState(null);
-  const [editValues, setEditValues] = useState({});
+  const [editValues, setEditValues] = useState(() => emptyValues());
   const [saving, setSaving] = useState(false);
 
   // Exercise name/category/type edit state
@@ -209,36 +210,22 @@ export default function ExerciseHistory() {
     }
   }
 
+  // The inline editor uses the same fields and value shape as the Today pad
   function startEdit(s) {
     setEditingSetId(s.id);
-    setEditValues({
-      weight_kg: s.weight_kg > 0 ? String(s.weight_kg) : '',
-      reps: s.reps > 0 ? String(s.reps) : '',
-      distance: s.distance > 0 ? String(s.distance) : '',
-      distance_unit: s.distance_unit || 'km',
-      duration_min: s.duration_seconds > 0 ? String(Math.floor(s.duration_seconds / 60)) : '',
-      duration_sec: s.duration_seconds > 0 ? String(s.duration_seconds % 60) : '',
-      set_type: s.set_type || 'normal',
-    });
+    setEditValues(prefillFromSet(s, trackType));
   }
 
   function cancelEdit() {
     setEditingSetId(null);
-    setEditValues({});
+    setEditValues(emptyValues());
   }
 
   async function saveEdit(setId) {
     setSaving(true);
-    const duration_seconds =
-      (parseInt(editValues.duration_min, 10) || 0) * 60 +
-      (parseInt(editValues.duration_sec, 10) || 0);
     const updates = {
-      weight_kg: parseFloat(editValues.weight_kg) || 0,
-      reps: parseInt(editValues.reps, 10) || 0,
-      distance: parseFloat(editValues.distance) || 0,
-      distance_unit: editValues.distance_unit || '',
-      duration_seconds,
-      set_type: editValues.set_type,
+      ...setPayloadFromValues(editValues, trackType),
+      set_type: editValues.setType || 'normal',
     };
     try {
       const { error: err } = await supabase.from('workout_sets').update(updates).eq('id', setId);
@@ -571,67 +558,15 @@ export default function ExerciseHistory() {
                         return (
                           <div key={s.id} className="px-5 py-3 bg-zinc-800/80 border-l-2 border-teal-500">
                             <p className="text-zinc-500 text-xs mb-2">Set {i + 1}</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-                              {isWeight && (
-                                <div>
-                                  <label className="text-zinc-500 text-xs block mb-0.5">Weight (kg)</label>
-                                  <input type="number" value={editValues.weight_kg} min="0" step="0.5"
-                                    onChange={(e) => setEditValues((p) => ({ ...p, weight_kg: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                  />
-                                </div>
-                              )}
-                              {isWeight && (
-                                <div>
-                                  <label className="text-zinc-500 text-xs block mb-0.5">Reps</label>
-                                  <input type="number" value={editValues.reps} min="0"
-                                    onChange={(e) => setEditValues((p) => ({ ...p, reps: e.target.value }))}
-                                    className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                  />
-                                </div>
-                              )}
-                              {trackType === 'distance_time' && (
-                                <div>
-                                  <label className="text-zinc-500 text-xs block mb-0.5">Distance</label>
-                                  <div className="flex gap-1">
-                                    <input type="number" value={editValues.distance} min="0" step="0.1"
-                                      onChange={(e) => setEditValues((p) => ({ ...p, distance: e.target.value }))}
-                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                    />
-                                    <select value={editValues.distance_unit}
-                                      onChange={(e) => setEditValues((p) => ({ ...p, distance_unit: e.target.value }))}
-                                      className="bg-zinc-700 border border-zinc-600 text-zinc-300 rounded-lg px-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                    >
-                                      <option value="km">km</option>
-                                      <option value="mi">mi</option>
-                                      <option value="m">m</option>
-                                    </select>
-                                  </div>
-                                </div>
-                              )}
-                              {(trackType === 'time' || trackType === 'distance_time') && (
-                                <div>
-                                  <label className="text-zinc-500 text-xs block mb-0.5">Duration</label>
-                                  <div className="flex gap-1 items-center">
-                                    <input type="number" value={editValues.duration_min} min="0" placeholder="min"
-                                      onChange={(e) => setEditValues((p) => ({ ...p, duration_min: e.target.value }))}
-                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                    />
-                                    <span className="text-zinc-500 text-xs">:</span>
-                                    <input type="number" value={editValues.duration_sec} min="0" max="59" placeholder="sec"
-                                      onChange={(e) => setEditValues((p) => ({ ...p, duration_sec: e.target.value }))}
-                                      className="w-full bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                    />
-                                  </div>
-                                </div>
-                              )}
+                            <div className="mb-3">
+                              <SetEntryFields trackType={trackType} values={editValues} onChange={setEditValues} />
                             </div>
                             <div className="flex items-center gap-2">
                               {SET_TYPE_OPTIONS.map((opt) => (
                                 <button key={opt.value} type="button"
-                                  onClick={() => setEditValues((p) => ({ ...p, set_type: opt.value }))}
+                                  onClick={() => setEditValues((p) => ({ ...p, setType: opt.value }))}
                                   className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                                    editValues.set_type === opt.value
+                                    editValues.setType === opt.value
                                       ? opt.value === 'dropset' ? 'bg-orange-500/20 text-orange-300 border-orange-500/60'
                                       : opt.value === 'superset' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
                                       : 'bg-teal-500/20 text-teal-300 border-teal-500/60'
