@@ -10,7 +10,7 @@ import { X } from 'lucide-react';
 export default function BarcodeScanner({ onScan, onClose }) {
   const scannerRef = useRef(null);
   const onScanRef = useRef(onScan);
-  onScanRef.current = onScan;
+  useEffect(() => { onScanRef.current = onScan; }, [onScan]);
   const [cameraError, setCameraError] = useState('');
 
   useEffect(() => {

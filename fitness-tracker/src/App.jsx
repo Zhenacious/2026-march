@@ -5,7 +5,6 @@ import Layout from './components/Layout';
 import Auth from './pages/Auth';
 import Today from './pages/Today';
 import Dashboard from './pages/Dashboard';
-import WorkoutLog from './pages/WorkoutLog';
 import { useSearchParams } from 'react-router-dom';
 import Exercises from './pages/Exercises';
 import CalendarView from './pages/CalendarView';
