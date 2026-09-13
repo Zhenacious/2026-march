@@ -28,33 +28,36 @@ export default function Dashboard() {
     async function fetchStats() {
       try {
         setLoading(true);
-        const { data: workouts, error: wErr } = await supabase
-          .from('workouts')
-          .select('id, date')
-          .eq('user_id', user.id)
-          .order('date', { ascending: false });
-        if (wErr) throw wErr;
+        // The four reads don't depend on each other, so they run at once
+        const weekStart = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+        const [workoutsRes, sets, foodRes, settingsRes] = await Promise.all([
+          supabase.from('workouts').select('id, date').eq('user_id', user.id).order('date', { ascending: false }),
+          fetchAllRows(() => supabase
+            .from('workout_sets')
+            .select('id, exercise_name, workouts!inner(user_id)')
+            .eq('workouts.user_id', user.id)),
+          supabase.from('food_entries').select('*').eq('user_id', user.id).gte('date', weekStart),
+          supabase.from('user_settings').select('goal_calories').eq('user_id', user.id).maybeSingle(),
+        ]);
+        if (workoutsRes.error) throw workoutsRes.error;
+        if (foodRes.error) throw foodRes.error;
+        if (settingsRes.error) throw settingsRes.error;
+        const workouts = workoutsRes.data;
+        const foodWeek = foodRes.data;
+        const settingsRow = settingsRes.data;
 
         const totalWorkouts = workouts?.length || 0;
         const lastWorkout =
           workouts && workouts.length > 0
             ? format(parseISO(workouts[0].date), 'MMM d, yyyy')
             : '—';
-        const workoutIds = (workouts || []).map((w) => w.id);
 
-        let totalSets = 0;
+        const totalSets = sets.length;
         let mostFrequent = '—';
-        if (workoutIds.length > 0) {
-          const sets = await fetchAllRows(() => supabase
-            .from('workout_sets')
-            .select('id, exercise_name')
-            .in('workout_id', workoutIds));
-          totalSets = sets?.length || 0;
-          if (sets && sets.length > 0) {
-            const freq = {};
-            sets.forEach((s) => { freq[s.exercise_name] = (freq[s.exercise_name] || 0) + 1; });
-            mostFrequent = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-          }
+        if (sets.length > 0) {
+          const freq = {};
+          sets.forEach((s) => { freq[s.exercise_name] = (freq[s.exercise_name] || 0) + 1; });
+          mostFrequent = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
         }
         // Streak — consecutive days with workouts ending today or yesterday
         const dateSet = new Set((workouts || []).map((w) => w.date));
@@ -69,13 +72,6 @@ export default function Dashboard() {
         }
 
         // Food logged over the same 7-day window
-        const weekStart = format(subDays(new Date(), 6), 'yyyy-MM-dd');
-        const { data: foodWeek } = await supabase
-          .from('food_entries').select('*')
-          .eq('user_id', user.id).gte('date', weekStart);
-        const { data: settingsRow } = await supabase
-          .from('user_settings').select('goal_calories').eq('user_id', user.id).maybeSingle();
-
         const calsByDate = {};
         (foodWeek || []).forEach((e) => {
           calsByDate[e.date] = (calsByDate[e.date] || 0) + entryTotals(e).calories;

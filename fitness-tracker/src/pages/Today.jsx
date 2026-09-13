@@ -692,6 +692,12 @@ export default function Today() {
   const maxOrderRef = useRef(0);
   // Add Set requests run one after another in the order they were tapped.
   const addChainRef = useRef(Promise.resolve());
+  // Per-exercise history stats: a ref mirror (readable inside async code
+  // without stale closures), the names already looked up (with or without
+  // history), and the names currently being fetched.
+  const statsRef = useRef({});
+  const knownRef = useRef(new Set());
+  const inFlightRef = useRef(new Set());
   const [motivational] = useState(() => {
     const lines = [
       "Every rep counts. Let's go.",
@@ -844,6 +850,10 @@ export default function Today() {
     setFlashSetId(null);
     workoutIdRef.current = null;
     maxOrderRef.current = 0;
+    // Stats exclude the day being viewed, so they are recomputed per day
+    statsRef.current = {};
+    knownRef.current = new Set();
+    setExerciseStats({});
     try {
       const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
       const dateNote = allNotes[selectedDate] || '';
@@ -868,8 +878,7 @@ export default function Today() {
         const setsData = workout?.workout_sets || [];
         maxOrderRef.current = setsData.reduce((m, s) => Math.max(m, s.set_order || 0), 0);
         setSets(setsData);
-        const names = [...new Set(setsData.map((s) => s.exercise_name))];
-        names.forEach((n) => fetchExerciseStats(n));
+        loadStats([...new Set(setsData.map((s) => s.exercise_name))]);
       } catch (err) {
         if (!cancelled) setError(friendlyDbError(err, "this day's sets"));
       } finally {
@@ -909,65 +918,72 @@ export default function Today() {
     return data.id;
   }
 
-  async function fetchExerciseStats(name) {
-    if (exerciseStats[name]) return exerciseStats[name];
+  // Loads history stats for several exercises in ONE request (previously each
+  // exercise re-fetched every workout the user ever logged). Names already
+  // known or in flight are skipped, so opening a sheet never repeats work.
+  async function loadStats(names) {
+    const wanted = [...new Set(names)].filter(
+      (n) => !knownRef.current.has(n) && !inFlightRef.current.has(n)
+    );
+    if (wanted.length === 0) return;
+    wanted.forEach((n) => inFlightRef.current.add(n));
     try {
-      const { data: workouts } = await supabase
-        .from('workouts').select('id, date').eq('user_id', user.id).order('date', { ascending: false });
-      if (!workouts || workouts.length === 0) return null;
+      // Sets for these exercises on any day except the one being viewed,
+      // joined to their workout for the date. Paged past the 1000-row cap.
+      const rows = await fetchAllRows(() => supabase
+        .from('workout_sets')
+        .select('id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, set_type, set_order, workouts!inner(date, user_id)')
+        .eq('workouts.user_id', user.id)
+        .in('exercise_name', wanted)
+        .neq('workouts.date', selectedDate));
 
-      const workoutDateMap = Object.fromEntries(workouts.map((w) => [w.id, w.date]));
-      const { data: historySets } = await supabase
-        .from('workout_sets').select('workout_id, weight_kg, reps, distance, distance_unit, duration_seconds, set_type')
-        .in('workout_id', workouts.map((w) => w.id))
-        .eq('exercise_name', name);
+      const byName = {};
+      for (const r of rows) {
+        const s = { ...r, date: r.workouts.date };
+        if (!byName[s.exercise_name]) byName[s.exercise_name] = [];
+        byName[s.exercise_name].push(s);
+      }
 
-      if (!historySets || historySets.length === 0) return null;
-
-      const withDates = historySets
-        .map((s) => ({ ...s, date: workoutDateMap[s.workout_id] }))
-        .filter((s) => s.date && s.date !== selectedDate)
-        .sort((a, b) => b.date.localeCompare(a.date));
-
-      if (withDates.length === 0) return null;
-
-      let bestE1RM = 0;
-      withDates.forEach((s) => {
-        if (s.weight_kg > 0 && s.reps > 0) {
-          const e1rm = Math.round(s.weight_kg * (1 + s.reps / 30) * 10) / 10;
-          if (e1rm > bestE1RM) bestE1RM = e1rm;
-        }
-      });
-
-      const byDate = {};
-      withDates.forEach((s) => {
-        if (!byDate[s.date]) byDate[s.date] = [];
-        byDate[s.date].push(s);
-      });
-      const sessionDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
-      const lastSessionDate = sessionDates[0];
-      const lastSessionVolume = lastSessionDate
-        ? byDate[lastSessionDate].reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0)
-        : 0;
-
-      // The ghost reference is the last session's top (max-effort) set, not
-      // whichever set came first — that's usually a warmup. Effort is e1RM
-      // for weight exercises; distance then duration for cardio-type ones
-      // (all sets of one exercise share a track type, so scores compare fairly).
+      // Effort is e1RM for weight exercises; distance then duration for
+      // cardio-type ones (all sets of one exercise share a track type).
       const effortScore = (s) => {
         if (s.weight_kg > 0 && s.reps > 0) return s.weight_kg * (1 + s.reps / 30);
         if (s.distance > 0) return s.distance * 1e6 + (s.duration_seconds || 0);
         return s.duration_seconds || 0;
       };
-      const lastSet = byDate[lastSessionDate].reduce(
-        (best, s) => (effortScore(s) > effortScore(best) ? s : best),
-        byDate[lastSessionDate][0]
-      );
 
-      const stats = { lastSet, bestE1RM, lastSessionVolume, lastSessionDate };
-      setExerciseStats((prev) => ({ ...prev, [name]: stats }));
-      return stats;
-    } catch { return null; }
+      const computed = {};
+      for (const name of wanted) {
+        const history = byName[name];
+        if (!history || history.length === 0) continue;
+
+        let bestE1RM = 0;
+        const byDate = {};
+        for (const s of history) {
+          if (s.weight_kg > 0 && s.reps > 0) {
+            const e1rm = Math.round(s.weight_kg * (1 + s.reps / 30) * 10) / 10;
+            if (e1rm > bestE1RM) bestE1RM = e1rm;
+          }
+          (byDate[s.date] = byDate[s.date] || []).push(s);
+        }
+        const lastSessionDate = Object.keys(byDate).sort((a, b) => b.localeCompare(a))[0];
+        const lastSession = [...byDate[lastSessionDate]].sort((a, b) => (a.set_order || 0) - (b.set_order || 0));
+        const lastSessionVolume = lastSession.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
+        // topSet = the hardest set of that session (what the entry pad starts
+        // from); finalSet = the one logged last (usually a drop-off set).
+        const topSet = lastSession.reduce((best, s) => (effortScore(s) > effortScore(best) ? s : best), lastSession[0]);
+        const finalSet = lastSession[lastSession.length - 1];
+        computed[name] = { topSet, finalSet, bestE1RM, lastSessionVolume, lastSessionDate };
+      }
+
+      wanted.forEach((n) => knownRef.current.add(n));
+      statsRef.current = { ...statsRef.current, ...computed };
+      setExerciseStats((prev) => ({ ...prev, ...computed }));
+    } catch (err) {
+      console.error('stats fetch failed:', err.message);
+    } finally {
+      wanted.forEach((n) => inFlightRef.current.delete(n));
+    }
   }
 
   // Builds the entry pad's ghost values from the most recent set for this
@@ -976,14 +992,14 @@ export default function Today() {
   // Shown as faded placeholder numbers, never logged directly.
   function getGhostFor(name) {
     const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
-    const histLast = exerciseStats[name]?.lastSet;
-    return prefillFromSet(todayLast || histLast, trackTypeOf(name));
+    const histTop = exerciseStats[name]?.topSet;
+    return prefillFromSet(todayLast || histTop, trackTypeOf(name));
   }
 
   // Opens the full-screen log sheet for an exercise, fetching its stats first
   // so the entry pad can show last time's numbers as a ghost reference.
   async function openLog(name) {
-    if (!exerciseStats[name]) await fetchExerciseStats(name);
+    if (!knownRef.current.has(name)) await loadStats([name]);
     const next = new URLSearchParams(searchParams);
     next.set('exercise', name);
     // Push when opening fresh (so the back gesture closes the sheet); replace
@@ -1002,7 +1018,7 @@ export default function Today() {
   // its stats may not be loaded yet — fetch them so the ghost values and
   // "vs last" comparison appear.
   useEffect(() => {
-    if (user && openExercise && !exerciseStats[openExercise]) fetchExerciseStats(openExercise);
+    if (user && openExercise && !knownRef.current.has(openExercise)) loadStats([openExercise]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, openExercise]);
 
@@ -1084,12 +1100,13 @@ export default function Today() {
 
       // PR detection only makes sense for weight & reps exercises, and only
       // once history has loaded (otherwise every first set looks like a PR).
-      const stats = exerciseStats[name];
+      const stats = statsRef.current[name];
       if (stats && type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
         const e1rm = Math.round(payload.weight_kg * (1 + payload.reps / 30) * 10) / 10;
         const prevBest = stats.bestE1RM || 0;
         if (e1rm > prevBest) {
           setPrSetIds((prev) => new Set([...prev, newSet.id]));
+          statsRef.current = { ...statsRef.current, [name]: { ...stats, bestE1RM: e1rm } };
           setExerciseStats((prev) => ({
             ...prev,
             [name]: { ...(prev[name] || {}), bestE1RM: e1rm },
