@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -50,6 +50,7 @@ export default function CalendarView() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [daySets, setDaySets] = useState([]);
   const [loadingDay, setLoadingDay] = useState(false);
+  const dayRequestRef = useRef(0);
   const [error, setError] = useState('');
 
   const fetchMonthWorkouts = useCallback(async () => {
@@ -85,19 +86,21 @@ export default function CalendarView() {
       const idToDate = {};
       workouts.forEach((w) => { idToDate[w.id] = w.date; });
 
-      const { data: sets } = await supabase
+      const { data: sets, error: setsErr } = await supabase
         .from('workout_sets')
         .select('workout_id, exercise_name')
         .in('workout_id', ids);
+      if (setsErr) throw setsErr;
 
       if (!sets || sets.length === 0) { setCalDots({}); return; }
 
       const exerciseNames = [...new Set(sets.map((s) => s.exercise_name))];
-      const { data: exData } = await supabase
+      const { data: exData, error: exErr } = await supabase
         .from('exercises')
         .select('name, category')
         .eq('user_id', user.id)
         .in('name', exerciseNames);
+      if (exErr) throw exErr;
 
       const categoryMap = {};
       (exData || []).forEach((ex) => { categoryMap[ex.name] = (ex.category || '').toLowerCase(); });
@@ -154,6 +157,8 @@ export default function CalendarView() {
     const workoutId = workoutDates[dateStr];
     if (!workoutId) return;
 
+    // Each click gets a ticket; a slower earlier click can't overwrite a later one
+    const ticket = ++dayRequestRef.current;
     setLoadingDay(true);
     try {
       const { data, error: err } = await supabase
@@ -162,12 +167,13 @@ export default function CalendarView() {
         .eq('workout_id', workoutId)
         .order('set_order');
 
+      if (ticket !== dayRequestRef.current) return;
       if (err) throw err;
       setDaySets(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoadingDay(false);
+      if (ticket === dayRequestRef.current) setLoadingDay(false);
     }
   }
 

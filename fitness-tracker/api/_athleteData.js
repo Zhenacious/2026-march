@@ -257,21 +257,20 @@ export async function getFoodLog({ days } = {}) {
   const since = daysAgoISO(n);
   const today = todayISO();
 
-  const [entriesRes, settingsRes] = await Promise.all([
-    client
+  const [entries, settingsRes] = await Promise.all([
+    fetchAllRows(() => client
       .from('food_entries')
-      .select('date, meal_type, food_name, quantity, portion_label, portion_grams, servings, serving_size, calories, protein_g, carbs_g, fat_g')
+      .select('id, date, meal_type, food_name, quantity, portion_label, portion_grams, servings, serving_size, calories, protein_g, carbs_g, fat_g')
       .eq('user_id', userId)
       .gte('date', since)
       .lte('date', today)
       .order('date', { ascending: false })
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })),
     client.from('user_settings').select('goal_calories, goal_protein_g').eq('user_id', userId).maybeSingle(),
   ]);
-  if (entriesRes.error) throw new Error(entriesRes.error.message);
 
   const byDate = new Map();
-  for (const e of entriesRes.data || []) {
+  for (const e of entries) {
     if (!byDate.has(e.date)) {
       byDate.set(e.date, { date: e.date, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, entries: [] });
     }

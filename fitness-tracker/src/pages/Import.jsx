@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { parseFitNotesCSV } from '../lib/fitnotes';
+import { format, subMonths } from 'date-fns';
 import { normalizeCategory } from '../lib/categories';
 import { Upload, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
 
@@ -74,11 +75,23 @@ export default function Import() {
       const workoutIdMap = {};
       (insertedWorkouts || []).forEach((w) => { workoutIdMap[w.date] = w.id; });
 
+      // Dates that already have sets are skipped, so importing the same file
+      // twice (or a file overlapping days logged in the app) cannot duplicate
+      // or interleave sets. Nothing already in the database is ever deleted.
+      const workoutIds = Object.values(workoutIdMap);
+      const existingSets = await fetchAllRows(() => supabase
+        .from('workout_sets')
+        .select('id, workout_id')
+        .in('workout_id', workoutIds));
+      const idToDate = {};
+      (insertedWorkouts || []).forEach((w) => { idToDate[w.id] = w.date; });
+      const datesWithSets = new Set(existingSets.map((s) => idToDate[s.workout_id]));
+
       const BATCH_SIZE = 100;
       let inserted = 0;
       setProgress({ done: 0, total: parsedRows.length });
 
-      const allSets = parsedRows.map((row, idx) => ({
+      const allSets = parsedRows.filter((row) => !datesWithSets.has(row.date)).map((row, idx) => ({
         workout_id: workoutIdMap[row.date],
         exercise_name: row.exercise,
         weight_kg: row.weight_kg,
@@ -97,9 +110,11 @@ export default function Import() {
         setProgress({ done: inserted, total: allSets.length });
       }
 
+      const skipped = datesWithSets.size;
       setStatus({
         type: 'success',
-        message: `Successfully imported ${allSets.length} sets across ${uniqueDates.length} workouts and ${uniqueExercises.length} exercises.`,
+        message: `Successfully imported ${allSets.length} sets across ${uniqueDates.length - skipped} workouts and ${uniqueExercises.length} exercises.`
+          + (skipped ? ` Skipped ${skipped} date${skipped === 1 ? '' : 's'} that already had sets logged.` : ''),
       });
       setParsedRows([]);
       setFileName('');
@@ -143,9 +158,9 @@ export default function Import() {
   function exportSinceDate(rangeValue) {
     const range = EXPORT_RANGES.find((r) => r.value === rangeValue);
     if (!range || range.months === null) return null;
-    const d = new Date();
-    d.setMonth(d.getMonth() - range.months);
-    return d.toISOString().slice(0, 10);
+    // format() gives the LOCAL calendar date; toISOString() would shift to UTC
+    // and pick the wrong day for anyone east of Greenwich.
+    return format(subMonths(new Date(), range.months), 'yyyy-MM-dd');
   }
 
   async function handleExport() {

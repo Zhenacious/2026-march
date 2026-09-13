@@ -52,24 +52,32 @@ export default function TodayFood({ date }) {
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     (async () => {
-      const { data: recent } = await supabase
-        .from('food_entries').select('*')
-        .eq('user_id', user.id).order('created_at', { ascending: false }).limit(200);
-      setAllRecent(recent || []);
+      // The three lists are independent, so ask for them all at once
+      const [recentRes, mineRes, settingsRes] = await Promise.all([
+        supabase.from('food_entries').select('*')
+          .eq('user_id', user.id).order('created_at', { ascending: false }).limit(200),
+        supabase.from('custom_foods').select('*').eq('user_id', user.id).order('name'),
+        supabase.from('user_settings').select('*').eq('user_id', user.id).maybeSingle(),
+      ]);
+      if (cancelled) return;
 
-      const { data: mine } = await supabase
-        .from('custom_foods').select('*').eq('user_id', user.id).order('name');
-      setMyFoods(mine || []);
+      if (recentRes.error) setError(friendlyDbError(recentRes.error, 'your previous foods'));
+      else setAllRecent(recentRes.data || []);
 
-      const { data: s } = await supabase
-        .from('user_settings').select('*').eq('user_id', user.id).maybeSingle();
-      if (s) {
+      if (mineRes.error) setError(friendlyDbError(mineRes.error, 'your saved foods'));
+      else setMyFoods(mineRes.data || []);
+
+      if (settingsRes.error) setError(friendlyDbError(settingsRes.error, 'your goals'));
+      else if (settingsRes.data) {
+        const s = settingsRes.data;
         setSettings(s);
         setGoalCal(String(s.goal_calories ?? ''));
         setGoalProtein(String(s.goal_protein_g ?? ''));
       }
     })();
+    return () => { cancelled = true; };
   }, [user]);
 
   const totals = useMemo(() => dayTotals(entries), [entries]);
@@ -131,11 +139,13 @@ export default function TodayFood({ date }) {
       // Commas and parens are stripped because PostgREST parses them as filter
       // syntax inside .or().
       const safe = q.replace(/[,()]/g, ' ').trim();
-      const { data: mine } = await supabase
+      const { data: mine, error: mineErr } = await supabase
         .from('custom_foods').select('*')
         .eq('user_id', user.id)
         .or(`name.ilike.%${safe}%,aliases.ilike.%${safe}%`)
         .limit(10);
+      // Don't hide a broken library search behind external results
+      if (mineErr) setSearchError(friendlyDbError(mineErr, 'your saved foods'));
 
       const resp = await fetch(`/api/food-search?q=${encodeURIComponent(q)}`);
       const json = await resp.json().catch(() => ({}));
@@ -199,7 +209,7 @@ export default function TodayFood({ date }) {
   /** Create tab: log the food and keep it in the library in one go. */
   async function createAndLog(values) {
     await savePanel(values, null);
-    const { data } = await supabase.from('custom_foods').insert({
+    const { data, error: libErr } = await supabase.from('custom_foods').insert({
       user_id: user.id,
       name: values.food_name,
       brand: '',
@@ -212,6 +222,11 @@ export default function TodayFood({ date }) {
       cal_per_100g: values.cal_per_100g, protein_per_100g: values.protein_per_100g,
       carbs_per_100g: values.carbs_per_100g, fat_per_100g: values.fat_per_100g,
     }).select().single();
+    if (libErr) {
+      // The entry was logged; only the library copy failed. Say so.
+      setError(friendlyDbError(libErr, 'your saved foods'));
+      return;
+    }
     if (data) setMyFoods((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
   }
 

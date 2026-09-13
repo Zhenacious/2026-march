@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, Search, Library, History, ChefHat, PlusCircle, Utensils } from 'lucide-react';
 import FoodPanel from './FoodPanel';
@@ -70,14 +70,25 @@ export default function AddFoodModal({
 
   useEffect(() => { lastTab = tab; }, [tab]);
 
+  // Editing an existing entry opens straight on the detail step. This must only
+  // react to the modal opening (or a different entry being chosen), never to the
+  // parent re-rendering, or a half-filled detail step gets thrown away.
   useEffect(() => {
     if (!open) return;
-    // Editing an existing entry opens straight on the detail step
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDetail(initialDetail);
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+  }, [open, initialDetail]);
+
+  // Escape closes. onClose is read through a ref so a new function identity on
+  // each parent render doesn't re-run this effect.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   // Which list the current tab shows, and whether the A–Z index applies
   const { rows, browsable } = useMemo(() => {

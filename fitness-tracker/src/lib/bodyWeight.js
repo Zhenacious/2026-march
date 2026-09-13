@@ -7,7 +7,8 @@ export function loadBodyWeights() {
 }
 
 export function saveBodyWeights(weights) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(weights));
+  // Private browsing / full storage can throw; the cache is a convenience only
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(weights)); } catch { /* ignore */ }
 }
 
 // Returns the most recent body weight on or before the given date string (yyyy-MM-dd)

@@ -11,9 +11,9 @@ export function useBodyWeights() {
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    fetchBodyWeights(user.id).then(({ weights: rows }) => {
-      if (!cancelled) setWeights(rows);
-    });
+    fetchBodyWeights(user.id)
+      .then(({ weights: rows }) => { if (!cancelled) setWeights(rows); })
+      .catch((err) => console.warn('Body weight refresh failed:', err?.message || err));
     return () => { cancelled = true; };
   }, [user?.id]);
 

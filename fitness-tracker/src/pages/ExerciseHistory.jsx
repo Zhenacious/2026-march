@@ -180,18 +180,22 @@ export default function ExerciseHistory() {
     setSavingExercise(true);
     try {
       const newName = editExName.trim();
+      // Rename the history rows FIRST. If that fails we stop before touching
+      // the library entry, so the exercise and its sets never disagree on the name.
+      if (newName !== exerciseName) {
+        const { error: setsErr } = await supabase
+          .from('workout_sets')
+          .update({ exercise_name: newName })
+          .eq('exercise_name', exerciseName);
+        if (setsErr) throw setsErr;
+      }
       const { error: err } = await supabase
         .from('exercises')
         .update({ name: newName, category: editExCategory, track_type: editExType })
         .eq('user_id', user.id)
         .eq('name', exerciseName);
       if (err) throw err;
-      // If name changed, update all workout_sets referencing the old name
       if (newName !== exerciseName) {
-        await supabase
-          .from('workout_sets')
-          .update({ exercise_name: newName })
-          .eq('exercise_name', exerciseName);
         // Navigate to the new URL, keeping the "came from" origin intact.
         navigate(`/exercises/${encodeURIComponent(newName)}`, { replace: true, state: location.state });
         return;
