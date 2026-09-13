@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Home,
@@ -15,7 +16,22 @@ import {
   LayoutDashboard,
   ChevronUp,
   Trophy,
+  RefreshCw,
 } from 'lucide-react';
+
+// Shown for the moment a page's code is being fetched (pages load on demand).
+function PageSkeleton() {
+  return (
+    <SkeletonTheme baseColor="#27272a" highlightColor="#3f3f46">
+      <div className="max-w-lg mx-auto px-4 pt-6">
+        <Skeleton height={28} width={160} />
+        <div className="mt-6 space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} height={64} borderRadius={16} />)}
+        </div>
+      </div>
+    </SkeletonTheme>
+  );
+}
 import { AnimatePresence, motion } from 'framer-motion';
 
 /** Secondary destinations — opened from the bottom "More" sheet (keeps the main chrome stable in mobile Safari / PWA). */
@@ -35,6 +51,15 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // A new build has been downloaded and is waiting (see main.jsx). It applies
+  // itself when the app goes to the background, or right away via this bar.
+  const [updateReady, setUpdateReady] = useState(() => !!window.__fittrackUpdateReady);
+  useEffect(() => {
+    const onReady = () => setUpdateReady(true);
+    window.addEventListener('fittrack:update-ready', onReady);
+    return () => window.removeEventListener('fittrack:update-ready', onReady);
+  }, []);
 
   const isTodayRoute = location.pathname === '/today';
 
@@ -76,7 +101,22 @@ export default function Layout() {
 
       {/* ── Page scroll area — padding clears the fixed bottom bar ── */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden bg-zinc-950 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]">
-        <Outlet />
+        {updateReady && (
+          <div className="mx-4 mt-3 flex items-center justify-between gap-3 bg-teal-950 border border-teal-800 text-teal-200 px-4 py-2.5 rounded-lg text-sm">
+            <span>A new version is ready.</span>
+            <button
+              type="button"
+              onClick={() => window.__fittrackApplyUpdate?.()}
+              className="flex items-center gap-1.5 font-medium text-teal-100 hover:text-white"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reload
+            </button>
+          </div>
+        )}
+        <Suspense fallback={<PageSkeleton />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* ── App-style bottom bar: primary = Today, rest = More (sheet, not side drawer) ── */}

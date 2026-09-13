@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { ScanBarcode, Plus, Pencil, Trash2, Target, Utensils, Check, BookmarkPlus, Library } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { entryTotals, dayTotals, recentFoods, amountLabel, MEAL_TYPES, MEAL_LABELS } from '../lib/food';
-import BarcodeScanner from './BarcodeScanner';
+// The camera/barcode library is large and only needed when scanning, so it is
+// fetched the first time the scanner opens rather than on every app launch.
+const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 import AddFoodModal from './AddFoodModal';
 import FoodPanel from './FoodPanel';
 import { insertFoodEntry, updateFoodEntry, deleteFoodEntry, toPanelFood, friendlyDbError } from '../lib/foodEntries';
@@ -318,15 +320,17 @@ export default function TodayFood({ date }) {
       </div>
 
       {scanning && (
-        <BarcodeScanner
-          onScan={(code) => {
-            setScanning(false);
-            setQuery(code);
-            setModalOpen(true);
-            runSearch(code);
-          }}
-          onClose={() => setScanning(false)}
-        />
+        <Suspense fallback={null}>
+          <BarcodeScanner
+            onScan={(code) => {
+              setScanning(false);
+              setQuery(code);
+              setModalOpen(true);
+              runSearch(code);
+            }}
+            onClose={() => setScanning(false)}
+          />
+        </Suspense>
       )}
 
       <Link to="/foods" className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-xs transition-colors -mt-1">

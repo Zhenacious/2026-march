@@ -1,20 +1,44 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { lazy } from 'react';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
 import Today from './pages/Today';
-import Dashboard from './pages/Dashboard';
-import { useSearchParams } from 'react-router-dom';
-import Exercises from './pages/Exercises';
-import CalendarView from './pages/CalendarView';
-// Progress page removed — charts now live on the Exercise History page.
-import Import from './pages/Import';
-import ExerciseHistory from './pages/ExerciseHistory';
-import BodyWeightTracker from './pages/BodyWeightTracker';
-import PersonalRecords from './pages/PersonalRecords';
-import Trends from './pages/Trends';
-import MyFoods from './pages/MyFoods';
+
+// Every page except Today (the daily one) loads on demand, so the phone only
+// downloads and parses the code for the screen it is actually showing. The
+// heavy chart library, for example, is only fetched when a chart page opens.
+//
+// After a deploy the old chunk files are gone; if a page's code fails to load
+// for that reason, one reload picks up the new build. The flag stops a broken
+// network from reloading forever.
+function lazyPage(loader) {
+  const RELOAD_FLAG = 'fittrack_chunk_reload';
+  return lazy(() => loader()
+    .then((mod) => { try { sessionStorage.removeItem(RELOAD_FLAG); } catch { /* ignore */ } return mod; })
+    .catch((err) => {
+      let reloaded = false;
+      try {
+        if (!sessionStorage.getItem(RELOAD_FLAG)) {
+          sessionStorage.setItem(RELOAD_FLAG, '1');
+          reloaded = true;
+          window.location.reload();
+        }
+      } catch { /* ignore */ }
+      if (!reloaded) throw err;
+      return new Promise(() => {}); // page is reloading; never resolve
+    }));
+}
+
+const Dashboard = lazyPage(() => import('./pages/Dashboard'));
+const Exercises = lazyPage(() => import('./pages/Exercises'));
+const CalendarView = lazyPage(() => import('./pages/CalendarView'));
+const Import = lazyPage(() => import('./pages/Import'));
+const ExerciseHistory = lazyPage(() => import('./pages/ExerciseHistory'));
+const BodyWeightTracker = lazyPage(() => import('./pages/BodyWeightTracker'));
+const PersonalRecords = lazyPage(() => import('./pages/PersonalRecords'));
+const Trends = lazyPage(() => import('./pages/Trends'));
+const MyFoods = lazyPage(() => import('./pages/MyFoods'));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();

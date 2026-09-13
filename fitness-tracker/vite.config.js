@@ -8,7 +8,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new build waits until the app decides to apply it (see
+      // main.jsx), instead of activating itself and pulling the page out from
+      // under the user mid-set.
+      registerType: 'prompt',
       // Registered by hand in main.jsx so the installed app can poll for new
       // builds — the auto-injected script only checks on a cold page load,
       // which a home-screen PWA almost never does.
@@ -37,10 +40,14 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            // Only table reads (/rest/v1/) are cached; auth and storage never are.
+            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'supabase-cache',
+              // On a slow or dead connection (gym basement), fall back to the
+              // cached copy after 4 s instead of waiting for the full timeout.
+              networkTimeoutSeconds: 4,
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24,

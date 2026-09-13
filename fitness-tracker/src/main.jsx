@@ -8,9 +8,12 @@ import './index.css';
 import 'react-loading-skeleton/dist/skeleton.css';
 
 // Keep the installed (home-screen) app in step with the deployed site.
-// registerType is 'autoUpdate', so a new build reloads itself once found —
-// but something has to go looking for it. An installed PWA is resumed rather
-// than reloaded, so without these checks it can serve a stale build for days.
+// Something has to go looking for new builds: an installed PWA is resumed
+// rather than reloaded, so without these checks it can serve a stale build
+// for days. When one is found it is NOT applied immediately (that would
+// reload the page mid-workout). Instead the Layout shows an "Update ready"
+// bar with a Reload button, and the update applies itself quietly the next
+// time the app goes to the background.
 const updateSW = registerSW({
   immediate: true,
   onRegisteredSW(_swUrl, registration) {
@@ -23,9 +26,16 @@ const updateSW = registerSW({
     document.addEventListener('visibilitychange', checkForUpdate);
   },
   onNeedRefresh() {
-    updateSW(true);
+    window.__fittrackUpdateReady = true;
+    window.dispatchEvent(new CustomEvent('fittrack:update-ready'));
+    const applyWhenHidden = () => {
+      if (document.visibilityState === 'hidden') updateSW(true);
+    };
+    document.addEventListener('visibilitychange', applyWhenHidden);
   },
 });
+// Used by the "Reload" button in Layout
+window.__fittrackApplyUpdate = () => updateSW(true);
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
