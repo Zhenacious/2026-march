@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import TodayFood from '../components/TodayFood';
 import { supabase } from '../lib/supabase';
+import { fetchAllRows } from '../lib/fetchAll';
+import { friendlyDbError } from '../lib/foodEntries';
 import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
@@ -681,6 +683,15 @@ export default function Today() {
   const [exerciseStats, setExerciseStats] = useState({});
   const [flashSetId, setFlashSetId] = useState(null);
   const [prSetIds, setPrSetIds] = useState(new Set());
+  const [error, setError] = useState('');
+  // The day's workout row id once known (null until the first set of the day),
+  // so quick taps don't each try to create the row.
+  const workoutIdRef = useRef(null);
+  // Highest set_order handed out today. Kept in a ref (not state) so two taps
+  // in quick succession can't both compute the same next order.
+  const maxOrderRef = useRef(0);
+  // Add Set requests run one after another in the order they were tapped.
+  const addChainRef = useRef(Promise.resolve());
   const [motivational] = useState(() => {
     const lines = [
       "Every rep counts. Let's go.",
@@ -778,40 +789,46 @@ export default function Today() {
     // select('*') so the live site keeps working even before the track_type
     // migration is applied (missing columns are simply absent on rows).
     supabase.from('exercises').select('*').eq('user_id', user.id).order('name')
-      .then(({ data }) => setExercises(data || []));
+      .then(({ data, error: exErr }) => {
+        // Don't replace the library with nothing on a failed request; without
+        // it every exercise would fall back to the weight/reps pad.
+        if (exErr) setError(friendlyDbError(exErr, 'your exercise library'));
+        else setExercises(data || []);
+      });
 
-    // Compute "recently logged" by walking the user's last ~30 workouts
+    // Compute "recently logged" by walking the user's last ~60 workouts
     // newest-first and collecting distinct exercise names.
     (async () => {
       try {
-        const { data: workouts } = await supabase
+        const { data: workouts, error: wErr } = await supabase
           .from('workouts')
           .select('id, date')
           .eq('user_id', user.id)
           .order('date', { ascending: false })
           .limit(60);
+        if (wErr) throw wErr;
         if (!workouts || workouts.length === 0) { setRecentNames([]); setFreqMap({}); return; }
         const ids = workouts.map((w) => w.id);
-        const { data: workoutSets } = await supabase
+        // 60 workouts can hold more than 1000 sets, so page through them
+        const workoutSets = await fetchAllRows(() => supabase
           .from('workout_sets')
-          .select('workout_id, exercise_name, set_order')
+          .select('id, workout_id, exercise_name, set_order')
           .in('workout_id', ids)
-          .order('set_order');
-        if (!workoutSets) { setRecentNames([]); setFreqMap({}); return; }
-        // Tally how often each exercise appears across this window…
+          .order('set_order'));
+        // Tally how often each exercise appears, and group names per workout
         const counts = {};
+        const namesByWorkout = new Map();
         for (const s of workoutSets) {
           counts[s.exercise_name] = (counts[s.exercise_name] || 0) + 1;
+          if (!namesByWorkout.has(s.workout_id)) namesByWorkout.set(s.workout_id, []);
+          namesByWorkout.get(s.workout_id).push(s.exercise_name);
         }
-        // …and walk workouts newest-first to find each one's most recent use.
-        const seen = new Map();
+        // Walk workouts newest-first to find each exercise's most recent use
+        const seen = new Set();
         for (const w of workouts) {
-          for (const s of workoutSets) {
-            if (s.workout_id !== w.id) continue;
-            if (!seen.has(s.exercise_name)) seen.set(s.exercise_name, true);
-          }
+          for (const n of namesByWorkout.get(w.id) || []) seen.add(n);
         }
-        setRecentNames([...seen.keys()].slice(0, 5));
+        setRecentNames([...seen].slice(0, 5));
         setFreqMap(counts);
       } catch (err) { console.error('recents fetch failed:', err.message); }
     })();
@@ -819,24 +836,49 @@ export default function Today() {
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     setLoading(true);
+    setError('');
     setPendingExercises([]);
+    setPrSetIds(new Set());
+    setFlashSetId(null);
+    workoutIdRef.current = null;
+    maxOrderRef.current = 0;
     try {
       const allNotes = JSON.parse(localStorage.getItem('fittrack_notes') || '{}');
       const dateNote = allNotes[selectedDate] || '';
       setNote(dateNote);
       setNoteExpanded(!!dateNote);
     } catch { setNote(''); setNoteExpanded(false); }
-    supabase.from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle()
-      .then(async ({ data: workout }) => {
-        if (!workout) { setSets([]); setLoading(false); return; }
-        const { data: setsData } = await supabase
-          .from('workout_sets').select('*').eq('workout_id', workout.id).order('set_order');
-        setSets(setsData || []);
-        setLoading(false);
-        const names = [...new Set((setsData || []).map((s) => s.exercise_name))];
+
+    (async () => {
+      try {
+        // One request: the day's workout row with its sets embedded
+        const { data: workout, error: loadErr } = await supabase
+          .from('workouts')
+          .select('id, notes, workout_sets(*)')
+          .eq('user_id', user.id)
+          .eq('date', selectedDate)
+          .order('set_order', { referencedTable: 'workout_sets' })
+          .order('created_at', { referencedTable: 'workout_sets' })
+          .maybeSingle();
+        if (cancelled) return;
+        if (loadErr) throw loadErr;
+        workoutIdRef.current = workout?.id || null;
+        const setsData = workout?.workout_sets || [];
+        maxOrderRef.current = setsData.reduce((m, s) => Math.max(m, s.set_order || 0), 0);
+        setSets(setsData);
+        const names = [...new Set(setsData.map((s) => s.exercise_name))];
         names.forEach((n) => fetchExerciseStats(n));
-      });
+      } catch (err) {
+        if (!cancelled) setError(friendlyDbError(err, "this day's sets"));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    // A day switched away from mid-request must not paint over the new day
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedDate]);
 
   function goToPrevDay() {
@@ -852,13 +894,19 @@ export default function Today() {
     setSearchParams({});
   }
 
+  // Returns the day's workout row id, creating the row if needed. An upsert on
+  // (user_id, date) means two overlapping calls can't collide on the unique
+  // key; only user_id/date are sent, so the row's notes are never touched.
   async function ensureWorkout() {
-    const { data: existing } = await supabase
-      .from('workouts').select('id').eq('user_id', user.id).eq('date', selectedDate).maybeSingle();
-    if (existing) return existing.id;
-    const { data: created } = await supabase
-      .from('workouts').insert({ user_id: user.id, date: selectedDate }).select().single();
-    return created.id;
+    if (workoutIdRef.current) return workoutIdRef.current;
+    const { data, error: upErr } = await supabase
+      .from('workouts')
+      .upsert({ user_id: user.id, date: selectedDate }, { onConflict: 'user_id,date' })
+      .select('id')
+      .single();
+    if (upErr) throw upErr;
+    workoutIdRef.current = data.id;
+    return data.id;
   }
 
   async function fetchExerciseStats(name) {
@@ -998,22 +1046,31 @@ export default function Today() {
     }
   }
 
-  async function addSetFor(name, values) {
-    if (!name) return;
+  // Taps are queued, so three quick taps log three sets in order instead of
+  // racing each other for the same set_order (or losing one entirely).
+  function addSetFor(name, values) {
+    const run = addChainRef.current.then(() => doAddSet(name, values));
+    addChainRef.current = run.catch(() => {});
+    return run;
+  }
+
+  async function doAddSet(name, values) {
+    if (!name) return null;
     setSaving(true);
     try {
       const workoutId = await ensureWorkout();
-      const maxOrder = sets.length > 0 ? Math.max(...sets.map((s) => s.set_order)) : 0;
       const type = trackTypeOf(name);
       const payload = setPayloadFromValues(values, type);
-      const { data: newSet, error } = await supabase.from('workout_sets').insert({
+      const nextOrder = maxOrderRef.current + 1;
+      const { data: newSet, error: insErr } = await supabase.from('workout_sets').insert({
         workout_id: workoutId,
         exercise_name: name,
         ...payload,
-        set_order: maxOrder + 1,
+        set_order: nextOrder,
         set_type: values.setType || 'normal',
       }).select().single();
-      if (error) throw error;
+      if (insErr) throw insErr;
+      maxOrderRef.current = Math.max(maxOrderRef.current, newSet.set_order || nextOrder);
       setSets((prev) => [...prev, newSet]);
 
       setFlashSetId(newSet.id);
@@ -1025,10 +1082,12 @@ export default function Today() {
       );
       setFreqMap((prev) => ({ ...prev, [name]: (prev[name] || 0) + 1 }));
 
-      // PR detection only makes sense for weight & reps exercises.
-      if (type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
+      // PR detection only makes sense for weight & reps exercises, and only
+      // once history has loaded (otherwise every first set looks like a PR).
+      const stats = exerciseStats[name];
+      if (stats && type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
         const e1rm = Math.round(payload.weight_kg * (1 + payload.reps / 30) * 10) / 10;
-        const prevBest = exerciseStats[name]?.bestE1RM || 0;
+        const prevBest = stats.bestE1RM || 0;
         if (e1rm > prevBest) {
           setPrSetIds((prev) => new Set([...prev, newSet.id]));
           setExerciseStats((prev) => ({
@@ -1037,8 +1096,11 @@ export default function Today() {
           }));
         }
       }
-    } catch (err) { console.error(err); }
-    finally { setSaving(false); }
+      return newSet;
+    } catch (err) {
+      setError(friendlyDbError(err, 'this set'));
+      return null;
+    } finally { setSaving(false); }
   }
 
   async function updateSetFor(setId, values) {
@@ -1096,13 +1158,13 @@ export default function Today() {
     const newTemplate = { id: Date.now().toString(), name: name.trim(), exercises: exerciseNames };
     const updated = [...templates, newTemplate];
     setTemplates(updated);
-    localStorage.setItem('fittrack_templates', JSON.stringify(updated));
+    try { localStorage.setItem('fittrack_templates', JSON.stringify(updated)); } catch { /* ignore */ }
   }
 
   function handleDeleteTemplate(id) {
     const updated = templates.filter((t) => t.id !== id);
     setTemplates(updated);
-    localStorage.setItem('fittrack_templates', JSON.stringify(updated));
+    try { localStorage.setItem('fittrack_templates', JSON.stringify(updated)); } catch { /* ignore */ }
   }
 
   // ⚠️ All hooks must be called above this line.
@@ -1176,6 +1238,16 @@ export default function Today() {
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
+
+      {error && (
+        <div className="mx-4 mb-3 flex items-start justify-between gap-3 bg-red-950 border border-red-800 text-red-300 px-4 py-3 rounded-lg text-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} aria-label="Dismiss"
+            className="text-red-400 hover:text-red-200 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Workout | Food tab switcher */}
       <div className="px-4 pb-3">
