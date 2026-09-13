@@ -9,7 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronRight, TrendingUp, BookOpen, FileText, Share } from 'lucide-react';
 import { CATEGORY_COLORS, MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
-import { DEFAULT_TRACK_TYPE, DISTANCE_UNITS, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues } from '../lib/trackTypes';
+import { DEFAULT_TRACK_TYPE, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues, isValidEntry } from '../lib/trackTypes';
+import SetEntryFields from '../components/SetEntryFields';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -21,18 +22,6 @@ const FILTER_TABS = MUSCLE_GROUPS;
 // Returns today's date as a yyyy-MM-dd string, evaluated fresh each call
 function getTodayStr() {
   return format(new Date(), 'yyyy-MM-dd');
-}
-
-function adjustWeight(current, delta) {
-  const n = parseFloat(current);
-  const base = Number.isFinite(n) ? n : 0;
-  return String(Math.max(0, Math.round((base + delta) * 100) / 100));
-}
-
-function adjustReps(current, delta) {
-  const n = parseInt(current, 10);
-  const base = Number.isFinite(n) ? n : 0;
-  return String(Math.max(0, base + delta));
 }
 
 // Builds a readable summary of a set from whatever fields it holds (weight×reps,
@@ -59,127 +48,6 @@ function commitOnEnter(e) {
   }
 }
 
-// Tapping a value field selects its whole contents, so typing replaces the
-// old number straight away — no moving the cursor or deleting digits first.
-// (Deferred a frame so the tap that focused the field doesn't immediately
-// collapse the selection.)
-function selectOnFocus(e) {
-  const el = e.target;
-  requestAnimationFrame(() => { try { el.select(); } catch { /* ignore */ } });
-}
-
-// One labelled +/- stepper with a numeric input in the middle. `ghost` is
-// last time's value: shown as a faded placeholder while the field is empty,
-// and used as the base the first time +/- is tapped.
-function Stepper({ label, value, onChange, step = 1, min = 0, max, ghost }) {
-  const adjust = (delta) => {
-    const base = value !== '' ? value : (ghost ?? '');
-    const n = parseInt(base, 10);
-    let next = (Number.isFinite(n) ? n : 0) + delta;
-    if (next < min) next = min;
-    if (max != null && next > max) next = max;
-    onChange(String(next));
-  };
-  return (
-    <div>
-      <p className="text-[10px] text-zinc-500 text-center mb-1">{label}</p>
-      <div className="flex items-center gap-1.5">
-        <button type="button" onClick={() => adjust(-step)}
-          className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-        <input type="number" inputMode="numeric" value={value} onFocus={selectOnFocus}
-          onChange={(e) => onChange(e.target.value)} placeholder={ghost || '0'}
-          className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
-        <button type="button" onClick={() => adjust(step)}
-          className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
-      </div>
-    </div>
-  );
-}
-
-// H : M : S steppers for time-based exercises.
-function TimeSteppers({ values, onChange, ghost }) {
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      <Stepper label="Hours" value={values.h} onChange={(v) => onChange({ ...values, h: v })} step={1} ghost={ghost?.h} />
-      <Stepper label="Minutes" value={values.m} onChange={(v) => onChange({ ...values, m: v })} step={1} max={59} ghost={ghost?.m} />
-      <Stepper label="Seconds" value={values.s} onChange={(v) => onChange({ ...values, s: v })} step={5} max={59} ghost={ghost?.s} />
-    </div>
-  );
-}
-
-// Distance value + unit, for distance_time exercises.
-function DistanceField({ values, onChange, ghost }) {
-  return (
-    <div>
-      <p className="text-[10px] text-zinc-500 text-center mb-1">Distance</p>
-      <div className="flex items-center gap-1.5">
-        <input type="number" inputMode="decimal" value={values.distance} onFocus={selectOnFocus}
-          onChange={(e) => onChange({ ...values, distance: e.target.value })} placeholder={ghost?.distance || '0'}
-          className={`flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${ghost?.distance ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`} />
-        <select value={values.distanceUnit}
-          onChange={(e) => onChange({ ...values, distanceUnit: e.target.value })}
-          className="bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-xl px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-          {DISTANCE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-        </select>
-      </div>
-    </div>
-  );
-}
-
-// Renders the right input fields for a given track type. `values` is the shared
-// entry shape from trackTypes.emptyValues().
-function SetEntryFields({ trackType, values, onChange, ghost }) {
-  if (trackType === 'time') return <TimeSteppers values={values} onChange={onChange} ghost={ghost} />;
-  if (trackType === 'distance_time') {
-    return (
-      <div className="space-y-2.5">
-        <DistanceField values={values} onChange={onChange} ghost={ghost} />
-        <TimeSteppers values={values} onChange={onChange} ghost={ghost} />
-      </div>
-    );
-  }
-  return <StepperPair values={values} onChange={onChange} ghost={ghost} />;
-}
-
-// ─── Weight + Reps stepper pair (shared by the entry pad and the edit form) ────
-// `ghost` (optional) is last time's values: shown as faded placeholders in
-// empty inputs, and used as the starting point when +/- is tapped on an empty
-// field — so one tap on "+" means "last time's weight plus one increment".
-function StepperPair({ values, onChange, ghost }) {
-  const weightBase = values.weightKg !== '' ? values.weightKg : (ghost?.weightKg ?? '');
-  const repsBase = values.reps !== '' ? values.reps : (ghost?.reps ?? '');
-  const inputClass = (hasGhost) =>
-    `flex-1 min-w-0 bg-zinc-800 border border-zinc-700 text-zinc-100 ${hasGhost ? 'placeholder-zinc-500/70' : 'placeholder-zinc-600'} rounded-xl px-2 py-2.5 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 text-center`;
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <p className="text-[10px] text-zinc-500 text-center mb-1">Weight (kg)</p>
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, -2.5) })}
-            className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-          <input type="number" inputMode="decimal" value={values.weightKg} onFocus={selectOnFocus}
-            onChange={(e) => onChange({ ...values, weightKg: e.target.value })} placeholder={ghost?.weightKg || '0'}
-            className={inputClass(!!ghost?.weightKg)} />
-          <button type="button" onClick={() => onChange({ ...values, weightKg: adjustWeight(weightBase, 2.5) })}
-            className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
-        </div>
-      </div>
-      <div>
-        <p className="text-[10px] text-zinc-500 text-center mb-1">Reps</p>
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, -1) })}
-            className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">−</button>
-          <input type="number" inputMode="numeric" value={values.reps} onFocus={selectOnFocus}
-            onChange={(e) => onChange({ ...values, reps: e.target.value })} placeholder={ghost?.reps || '0'}
-            className={inputClass(!!ghost?.reps)} />
-          <button type="button" onClick={() => onChange({ ...values, reps: adjustReps(repsBase, 1) })}
-            className="w-11 h-11 flex-shrink-0 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white hover:border-zinc-600 text-lg font-bold">+</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SetTypePills({ value, onChange }) {
   return (
     <div className="flex gap-1.5">
@@ -200,40 +68,54 @@ function SetTypePills({ value, onChange }) {
 // — once the app is added to the iOS Home Screen — it fills the device edge to edge.
 function ExerciseLogSheet({
   name, trackType, color, categoryLabel, sets, stats, prSetIds, flashSetId,
-  setNotes, onSaveNote, ghost, saving,
+  setNotes, onSaveNote, prefill, saving,
   onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onViewHistory, onClose, onPrev, onNext,
 }) {
-  // The entry pad starts empty; `ghost` (your most recent set for this
-  // exercise) shows through as faded placeholder numbers to beat, and seeds
-  // the +/- steppers so one tap starts from last time's value.
-  const [entry, setEntry] = useState(() => emptyValues());
+  // The entry pad starts on real, editable numbers: `prefill` is your most
+  // recent set for this exercise (today's last, else last session's top set).
+  // Tap a field to replace a number, or +/- to nudge it, then Add Set. After
+  // each Add Set the pad shows the set you just logged, so repeating is one tap.
+  const [entry, setEntry] = useState(() => prefill || emptyValues());
   const [editingSetId, setEditingSetId] = useState(null);
   const [editValues, setEditValues] = useState(() => emptyValues());
   const [tappedSetId, setTappedSetId] = useState(null);
+  // Once you've changed anything in the pad, a later prefill (e.g. history
+  // arriving after the sheet opened) must not overwrite your numbers.
+  const touchedRef = useRef(false);
 
   const isWeight = trackType === 'weight_reps';
 
   // Switching exercise (prev/next) reuses this sheet — reset the entry pad and
   // any in-progress edit to the newly-focused exercise.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEntry(emptyValues());
+    touchedRef.current = false;
+    setEntry(prefill || emptyValues());
     setEditingSetId(null);
     setTappedSetId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
-  // Whether the entry pad has any real (typed or stepped) values. If not,
-  // Add Set logs the ghost values — one tap repeats last time's set.
-  const hasEntry = trackType === 'time'
-    ? entry.h !== '' || entry.m !== '' || entry.s !== ''
-    : trackType === 'distance_time'
-      ? entry.distance !== '' || entry.h !== '' || entry.m !== '' || entry.s !== ''
-      : entry.weightKg !== '' || entry.reps !== '';
+  // Follow the latest prefill while the pad is untouched
+  useEffect(() => {
+    if (touchedRef.current || !prefill) return;
+    setEntry(prefill);
+  }, [prefill]);
 
-  function handleAddSet() {
-    // Empty pad = repeat last time (the ghost); the set-type pill you picked
-    // still applies either way.
-    onAddSet(hasEntry ? entry : { ...(ghost || emptyValues()), setType: entry.setType });
+  function changeEntry(next) {
+    touchedRef.current = true;
+    setEntry(next);
+  }
+
+  const canAdd = !saving && isValidEntry(entry, trackType);
+
+  async function handleAddSet() {
+    if (!canAdd) return;
+    const logged = await onAddSet(entry);
+    if (logged) {
+      // The pad now shows exactly what was just logged
+      touchedRef.current = false;
+      setEntry(prefillFromSet(logged, trackType));
+    }
   }
 
   const todayVol = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
@@ -376,14 +258,14 @@ function ExerciseLogSheet({
 
         {/* Docked entry pad */}
         <div className="border-t border-zinc-800 bg-zinc-900/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] space-y-2.5 flex-shrink-0">
-          <SetEntryFields trackType={trackType} values={entry} onChange={setEntry} ghost={ghost} />
+          <SetEntryFields trackType={trackType} values={entry} onChange={changeEntry} />
           <div className="flex items-center gap-2">
             {isWeight && (
               <div className="flex-1">
-                <SetTypePills value={entry.setType} onChange={(v) => setEntry((e) => ({ ...e, setType: v }))} />
+                <SetTypePills value={entry.setType} onChange={(v) => changeEntry({ ...entry, setType: v })} />
               </div>
             )}
-            <button onClick={handleAddSet} disabled={saving}
+            <button onClick={handleAddSet} disabled={!canAdd}
               className={`bg-gradient-to-r from-teal-600 to-cyan-500 hover:from-teal-500 hover:to-cyan-400 active:from-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 ${isWeight ? 'flex-shrink-0' : 'flex-1'}`}>
               <Plus className="w-4 h-4" /> {saving ? 'Adding…' : 'Add Set'}
             </button>
@@ -991,18 +873,20 @@ export default function Today() {
     }
   }
 
-  // Builds the entry pad's ghost values from the most recent set for this
-  // exercise — today's last if present, otherwise the historical last — shaped
-  // for the exercise's track type (weight/reps, time, or distance+time).
-  // Shown as faded placeholder numbers, never logged directly.
-  function getGhostFor(name) {
-    const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === name.toLowerCase());
-    const histTop = exerciseStats[name]?.topSet;
-    return prefillFromSet(todayLast || histTop, trackTypeOf(name));
-  }
+  // The entry pad's starting values for the open exercise: today's last set if
+  // there is one, otherwise the top set of the last session. Memoised so the
+  // sheet only sees a new object when the underlying set actually changes.
+  const prefillForOpen = useMemo(() => {
+    if (!openExercise) return null;
+    const todayLast = [...sets].reverse().find((s) => s.exercise_name.toLowerCase() === openExercise.toLowerCase());
+    const histTop = exerciseStats[openExercise]?.topSet;
+    const source = todayLast || histTop;
+    return source ? prefillFromSet(source, trackTypeOf(openExercise)) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openExercise, sets, exerciseStats]);
 
   // Opens the full-screen log sheet for an exercise, fetching its stats first
-  // so the entry pad can show last time's numbers as a ghost reference.
+  // so the entry pad can start on last time's numbers.
   async function openLog(name) {
     if (!knownRef.current.has(name)) await loadStats([name]);
     const next = new URLSearchParams(searchParams);
@@ -1020,7 +904,7 @@ export default function Today() {
   }
 
   // When the sheet opens straight from the URL (back from History, a refresh),
-  // its stats may not be loaded yet — fetch them so the ghost values and
+  // its stats may not be loaded yet; fetch them so the pad's starting values and
   // "vs last" comparison appear.
   useEffect(() => {
     if (user && openExercise && !knownRef.current.has(openExercise)) loadStats([openExercise]);
@@ -1411,7 +1295,7 @@ export default function Today() {
             flashSetId={flashSetId}
             setNotes={setNotes}
             onSaveNote={saveSetNote}
-            ghost={getGhostFor(openExercise)}
+            prefill={prefillForOpen}
             saving={saving}
             onAddSet={(vals) => addSetFor(openExercise, vals)}
             onUpdateSet={(id, vals) => updateSetFor(id, vals)}

@@ -48,6 +48,30 @@ so they pick up their Chinese names (rows saved before the column existed have n
   query that can return more than 1000 rows. Test: `node scripts/test-fetch-all.mjs`.
   Export now offers Lifetime / Last year / 6 months / 3 months.
 
+### 2026-09-13 bug sweep + phone speed + logging UX (7 phases, all shipped)
+- Entry pad shows REAL editable values (`prefill` prop): today's last set for
+  the exercise, else last session's TOP set (user chose top over last). After
+  Add Set the pad shows the set just logged. `touchedRef` stops a late prefill
+  overwriting typed numbers. Add Set is disabled until `isValidEntry` passes.
+- Entry fields extracted to `src/components/SetEntryFields.jsx`. Time pads are
+  two columns (Minutes / Seconds) with carry; hours fold into minutes. Inputs
+  are `type="text"` + inputMode so select-on-focus works. Verified at 360 px.
+- Pages load on demand (`React.lazy` in App.jsx, Suspense in Layout); main
+  chunk 1.55 MB -> 468 KB. Service worker is `registerType: 'prompt'`: an
+  "Update ready" bar appears, update applies when the app goes to background.
+  Code-splitting and 'prompt' MUST stay together (old app + new SW = 404 chunks).
+- Today: one request per day load (workouts + embedded sets), one stats query
+  for all exercises (`loadStats`), Add Set taps queued (`addChainRef`),
+  `ensureWorkout` upserts, visible error banner. Dashboard fetches in parallel.
+- Notes in DB: `workouts.notes` (session) + `workout_sets.notes` (per set,
+  migration 013). `src/lib/notesMigration.js` pushes old localStorage notes
+  up once per device (flag `fittrack_notes_migrated_v1`). Export + connector
+  include both.
+- Deleted dead pages WorkoutLog.jsx and Progress.jsx. ESLint now has
+  eslint-plugin-react's jsx-uses-vars (no more false "unused" errors).
+- Not done (optional in plan): ExerciseHistory's inline set editor still has
+  its own min/sec fields rather than reusing SetEntryFields.
+
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
   (claude.ai project / Claude Code) can pull training, food and weight data live.

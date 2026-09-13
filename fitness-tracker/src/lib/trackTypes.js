@@ -55,23 +55,33 @@ export function prefillFromSet(set, trackType) {
   const v = emptyValues();
   if (!set) return v;
   v.setType = set.set_type || 'normal';
+  // The pad has Minutes and Seconds only, so hours fold into minutes (1:05:00
+  // becomes 65 min); hmsToSeconds and formatDuration handle minutes over 59.
+  const timeFields = (seconds) => {
+    const { h, m, s } = secondsToHMS(seconds);
+    const minutes = h * 60 + m;
+    return { h: '', m: minutes ? String(minutes) : '', s: s ? String(s) : '' };
+  };
   if (trackType === 'time') {
-    const { h, m, s } = secondsToHMS(set.duration_seconds);
-    v.h = h ? String(h) : '';
-    v.m = m ? String(m) : '';
-    v.s = s ? String(s) : '';
+    Object.assign(v, timeFields(set.duration_seconds));
   } else if (trackType === 'distance_time') {
     v.distance = set.distance > 0 ? String(set.distance) : '';
     v.distanceUnit = set.distance_unit || 'km';
-    const { h, m, s } = secondsToHMS(set.duration_seconds);
-    v.h = h ? String(h) : '';
-    v.m = m ? String(m) : '';
-    v.s = s ? String(s) : '';
+    Object.assign(v, timeFields(set.duration_seconds));
   } else {
     v.weightKg = set.weight_kg > 0 ? String(set.weight_kg) : '';
     v.reps = set.reps > 0 ? String(set.reps) : '';
   }
   return v;
+}
+
+// Whether the entry pad holds enough to log a meaningful set: reps for weight
+// exercises, a duration for timed ones, a distance or duration for cardio.
+export function isValidEntry(values, trackType) {
+  const seconds = hmsToSeconds(values.h, values.m, values.s);
+  if (trackType === 'time') return seconds > 0;
+  if (trackType === 'distance_time') return (parseFloat(values.distance) || 0) > 0 || seconds > 0;
+  return (parseInt(values.reps, 10) || 0) > 0;
 }
 
 // Turn entry-pad values into the workout_sets columns for the given type.
