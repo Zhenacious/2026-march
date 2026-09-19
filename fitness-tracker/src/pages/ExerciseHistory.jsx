@@ -113,50 +113,31 @@ export default function ExerciseHistory() {
       setLoading(true);
       setError('');
       try {
-        // Fetch exercise metadata (select * so the live site keeps working even
-        // before the track_type migration is applied).
-        const { data: exData } = await supabase
-          .from('exercises')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('name', exerciseName)
-          .maybeSingle();
-        setExercise(exData || { name: exerciseName, category: '', track_type: DEFAULT_TRACK_TYPE });
+        // Three independent reads, sent together: this exercise's details, every
+        // exercise name (for prev/next), and this exercise's sets joined to their
+        // workout for the date. The join replaces the old "fetch all 263 workouts,
+        // then ask for sets by id list" pair (two round trips and a 10 KB URL).
+        const [exRes, allExRes, sets] = await Promise.all([
+          supabase.from('exercises').select('*').eq('user_id', user.id).eq('name', exerciseName).maybeSingle(),
+          supabase.from('exercises').select('name').eq('user_id', user.id).order('name'),
+          fetchAllRows(() => supabase
+            .from('workout_sets')
+            .select('*, workouts!inner(date, user_id)')
+            .eq('workouts.user_id', user.id)
+            .eq('exercise_name', exerciseName)
+            .order('set_order')),
+        ]);
+        if (exRes.error) throw exRes.error;
+        if (allExRes.error) throw allExRes.error;
+        setExercise(exRes.data || { name: exerciseName, category: '', track_type: DEFAULT_TRACK_TYPE });
+        setAllNames((allExRes.data || []).map((e) => e.name));
 
-        // Also fetch all exercise names so the header can offer prev/next nav.
-        const { data: allEx } = await supabase
-          .from('exercises')
-          .select('name')
-          .eq('user_id', user.id)
-          .order('name');
-        setAllNames((allEx || []).map((e) => e.name));
+        if (sets.length === 0) { setSessions([]); return; }
 
-        // Fetch all workouts for this user
-        const { data: workouts, error: wErr } = await supabase
-          .from('workouts')
-          .select('id, date')
-          .eq('user_id', user.id)
-          .order('date', { ascending: false });
-        if (wErr) throw wErr;
-        if (!workouts || workouts.length === 0) { setSessions([]); return; }
-
-        const workoutIds = workouts.map((w) => w.id);
-        const workoutDateMap = {};
-        workouts.forEach((w) => { workoutDateMap[w.id] = w.date; });
-
-        // Fetch all sets for this exercise
-        const sets = await fetchAllRows(() => supabase
-          .from('workout_sets')
-          .select('*')
-          .in('workout_id', workoutIds)
-          .eq('exercise_name', exerciseName)
-          .order('set_order'));
-        if (!sets || sets.length === 0) { setSessions([]); return; }
-
-        // Group sets by workout date
+        // Group sets by workout date (drop the joined workout from each row)
         const byDate = {};
-        sets.forEach((s) => {
-          const date = workoutDateMap[s.workout_id];
+        sets.forEach(({ workouts: w, ...s }) => {
+          const date = w?.date;
           if (!date) return;
           if (!byDate[date]) byDate[date] = [];
           byDate[date].push(s);

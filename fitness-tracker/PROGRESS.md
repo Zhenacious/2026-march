@@ -72,6 +72,11 @@ so they pick up their Chinese names (rows saved before the column existed have n
 - ExerciseHistory's inline set editor now uses SetEntryFields too (same fields,
   same value shape, same set-type pills).
 
+### Efficiency loop (2026-09-19, autonomous, one change per pass)
+1. ExerciseHistory: 4 sequential requests -> 3 parallel; sets come via a
+   `workouts!inner(date)` join instead of "all workouts, then sets by 263-id
+   list" (no more 10 KB URL). Verified: 348 bench rows with dates, ~1 s.
+
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
   (claude.ai project / Claude Code) can pull training, food and weight data live.
