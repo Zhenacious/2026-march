@@ -11,6 +11,7 @@ import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronR
 import { CATEGORY_COLORS, MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { DEFAULT_TRACK_TYPE, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues, isValidEntry } from '../lib/trackTypes';
 import SetEntryFields from '../components/SetEntryFields';
+import { computePrSetIds } from '../lib/personalRecords';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -565,7 +566,6 @@ export default function Today() {
 
   const [exerciseStats, setExerciseStats] = useState({});
   const [flashSetId, setFlashSetId] = useState(null);
-  const [prSetIds, setPrSetIds] = useState(new Set());
   const [error, setError] = useState('');
   // The day's workout row id once known (null until the first set of the day),
   // so quick taps don't each try to create the row.
@@ -575,10 +575,8 @@ export default function Today() {
   const maxOrderRef = useRef(0);
   // Add Set requests run one after another in the order they were tapped.
   const addChainRef = useRef(Promise.resolve());
-  // Per-exercise history stats: a ref mirror (readable inside async code
-  // without stale closures), the names already looked up (with or without
-  // history), and the names currently being fetched.
-  const statsRef = useRef({});
+  // The exercise names already looked up (with or without history) and the
+  // ones currently being fetched, so opening a sheet never repeats a request.
   const knownRef = useRef(new Set());
   const inFlightRef = useRef(new Set());
   const [motivational] = useState(() => {
@@ -652,6 +650,16 @@ export default function Today() {
     [exercises]
   );
   const trackTypeOf = (name) => exerciseByName[name?.toLowerCase()]?.track_type || DEFAULT_TRACK_TYPE;
+
+  // Which of the day's sets beat every set of that exercise ever logged.
+  // Worked out from the sets themselves rather than tracked as the day goes
+  // on, so today's earlier sets count too: repeating a record is second best,
+  // not a new record, and a reload can't make an old set look like a new one.
+  const prSetIds = useMemo(
+    () => computePrSetIds(sets, exerciseStats, trackTypeOf),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sets, exerciseStats, exerciseByName]
+  );
 
   const groupedExercises = useMemo(() => {
     const order = [];
@@ -730,12 +738,10 @@ export default function Today() {
     setLoading(true);
     setError('');
     setPendingExercises([]);
-    setPrSetIds(new Set());
     setFlashSetId(null);
     workoutIdRef.current = null;
     maxOrderRef.current = 0;
     // Stats exclude the day being viewed, so they are recomputed per day
-    statsRef.current = {};
     knownRef.current = new Set();
     setExerciseStats({});
     setNote('');
@@ -864,7 +870,6 @@ export default function Today() {
       }
 
       wanted.forEach((n) => knownRef.current.add(n));
-      statsRef.current = { ...statsRef.current, ...computed };
       setExerciseStats((prev) => ({ ...prev, ...computed }));
     } catch (err) {
       console.error('stats fetch failed:', err.message);
@@ -987,21 +992,8 @@ export default function Today() {
       );
       setFreqMap((prev) => ({ ...prev, [name]: (prev[name] || 0) + 1 }));
 
-      // PR detection only makes sense for weight & reps exercises, and only
-      // once history has loaded (otherwise every first set looks like a PR).
-      const stats = statsRef.current[name];
-      if (stats && type === 'weight_reps' && payload.weight_kg > 0 && payload.reps > 0) {
-        const e1rm = Math.round(payload.weight_kg * (1 + payload.reps / 30) * 10) / 10;
-        const prevBest = stats.bestE1RM || 0;
-        if (e1rm > prevBest) {
-          setPrSetIds((prev) => new Set([...prev, newSet.id]));
-          statsRef.current = { ...statsRef.current, [name]: { ...stats, bestE1RM: e1rm } };
-          setExerciseStats((prev) => ({
-            ...prev,
-            [name]: { ...(prev[name] || {}), bestE1RM: e1rm },
-          }));
-        }
-      }
+      // The PR badge is worked out from the day's sets (see prSetIds), so
+      // adding one here is enough - nothing to mark up by hand.
       return newSet;
     } catch (err) {
       setError(friendlyDbError(err, 'this set'));

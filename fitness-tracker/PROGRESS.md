@@ -4,7 +4,7 @@
 > and update it at the END of a session so next time picks up where this one left off.
 > Keep it short. If a section gets long, trim the oldest stuff.
 
-_Last updated: 2026-09-08_
+_Last updated: 2026-09-23_
 
 ## What this app is
 A personal React + Supabase fitness tracker. Log gym sessions (exercises, sets,
@@ -76,6 +76,17 @@ so they pick up their Chinese names (rows saved before the column existed have n
 1. ExerciseHistory: 4 sequential requests -> 3 parallel; sets come via a
    `workouts!inner(date)` join instead of "all workouts, then sets by 263-id
    list" (no more 10 KB URL). Verified: 348 bench rows with dates, ~1 s.
+
+### PR badge fix (2026-09-23)
+- The `PR!` badge compared a new set only against history from OTHER days
+  (`loadStats` excludes the day being viewed so the entry pad can show the
+  last session). Sets already logged today were invisible to it, so repeating
+  a record set - or logging one before its history finished loading - badged
+  the second set as a new record. Reported by the user.
+- Badges now come from `src/lib/personalRecords.js` (`computePrSetIds`), a pure
+  function over the day's sets + the history best, called from a `useMemo` in
+  Today.jsx. Matching a record is not beating it, and badges survive a reload.
+- Test: `npm run test:pr` (13 assertions, no database).
 
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
