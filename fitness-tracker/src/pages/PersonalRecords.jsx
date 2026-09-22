@@ -8,6 +8,8 @@ import { CATEGORY_COLORS, MUSCLE_GROUPS } from '../lib/categories';
 import { effectiveWeight } from '../lib/bodyWeight';
 import { useBodyWeights } from '../hooks/useBodyWeights';
 import { formatDuration } from '../lib/trackTypes';
+import { estimate1RM } from '../lib/personalRecords';
+import { friendlyDbError } from '../lib/foodEntries';
 import { format, parseISO } from 'date-fns';
 
 const UNIT_TO_METERS = { km: 1000, mi: 1609.34, m: 1 };
@@ -18,35 +20,31 @@ export default function PersonalRecords() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeGroup, setActiveGroup] = useState('All');
+  const [error, setError] = useState('');
   const [bodyWeights] = useBodyWeights();
 
   useEffect(() => {
     async function fetchRecords() {
       if (!user) return;
       setLoading(true);
+      setError('');
       try {
-        const { data: workouts } = await supabase
-          .from('workouts')
-          .select('id, date')
-          .eq('user_id', user.id);
-
-        if (!workouts || workouts.length === 0) { setRecords([]); return; }
-
-        const workoutDateMap = {};
-        workouts.forEach((w) => { workoutDateMap[w.id] = w.date; });
-        const workoutIds = workouts.map((w) => w.id);
-
-        const sets = await fetchAllRows(() => supabase
-          .from('workout_sets')
-          .select('id, workout_id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds')
-          .in('workout_id', workoutIds));
-
+        // Every set ever logged, with its workout's date attached by the
+        // database (an inner join) rather than by fetching every workout row
+        // first and listing all their ids in the URL. Paged past Supabase's
+        // 1000-row cap, and fetched alongside the exercise list.
+        const [sets, { data: exercises, error: exErr }] = await Promise.all([
+          fetchAllRows(() => supabase
+            .from('workout_sets')
+            .select('id, exercise_name, weight_kg, reps, distance, distance_unit, duration_seconds, workouts!inner(date, user_id)')
+            .eq('workouts.user_id', user.id)),
+          supabase
+            .from('exercises')
+            .select('name, category, track_type')
+            .eq('user_id', user.id),
+        ]);
+        if (exErr) throw exErr;
         if (!sets || sets.length === 0) { setRecords([]); return; }
-
-        const { data: exercises } = await supabase
-          .from('exercises')
-          .select('name, category, track_type')
-          .eq('user_id', user.id);
 
         const catMap = {};
         const trackMap = {};
@@ -59,7 +57,7 @@ export default function PersonalRecords() {
         // duration/distance (time and distance exercises) per exercise
         const byExercise = {};
         sets.forEach((s) => {
-          const date = workoutDateMap[s.workout_id];
+          const date = s.workouts?.date;
           if (!date) return;
           const name = s.exercise_name;
           if (!byExercise[name]) {
@@ -73,7 +71,8 @@ export default function PersonalRecords() {
 
           const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
           const reps = s.reps || 0;
-          const e1rm = reps > 0 ? Math.round(effW * (1 + reps / 30) * 10) / 10 : effW;
+          // No reps means no lift to estimate from, so it sets no record.
+          const e1rm = estimate1RM(effW, reps);
           if (e1rm > rec.bestE1RM) {
             rec.bestE1RM = e1rm;
             rec.bestE1RMDate = date;
@@ -113,6 +112,9 @@ export default function PersonalRecords() {
           });
 
         setRecords(result);
+      } catch (err) {
+        setError(friendlyDbError(err, 'your records'));
+        setRecords([]);
       } finally {
         setLoading(false);
       }
@@ -150,6 +152,12 @@ export default function PersonalRecords() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <div className="mb-4 bg-rose-950/40 border border-rose-900/60 text-rose-200 text-sm rounded-xl px-4 py-3">
+          {error}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-40 text-zinc-400">Loading…</div>

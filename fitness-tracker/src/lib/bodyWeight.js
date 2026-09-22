@@ -38,12 +38,8 @@ export function effectiveWeight(weightKg, reps, date, bodyWeights) {
   return weightKg || 0;
 }
 
-// Epley estimated 1RM
-export function epley1RM(weightKg, reps) {
-  if (!weightKg || weightKg <= 0) return 0;
-  if (!reps || reps <= 1) return weightKg;
-  return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
-}
+// Estimated 1RM lives in src/lib/personalRecords.js (estimate1RM) - one
+// copy for the whole front end.
 
 // ---------------------------------------------------------------------------
 // Database-backed storage (table: body_weights). localStorage is kept as a

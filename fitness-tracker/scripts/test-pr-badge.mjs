@@ -1,6 +1,6 @@
 // Checks which sets get the "PR!" badge on the Today page.
 // Pure maths, no database. Run: node scripts/test-pr-badge.mjs
-import { computePrSetIds, e1rmOf } from '../src/lib/personalRecords.js';
+import { computePrSetIds, e1rmOf, estimate1RM } from '../src/lib/personalRecords.js';
 
 const weightReps = () => 'weight_reps';
 
@@ -14,6 +14,10 @@ const ids = (sets, stats, type = weightReps) => [...computePrSetIds(sets, stats,
 
 // Epley maths
 check('100 kg x 8 is 126.7', e1rmOf({ weight_kg: 100, reps: 8 }), 126.7);
+check('a single is the weight, not an estimate', estimate1RM(140, 1), 140);
+check('a light single is the weight too', estimate1RM(12, 1), 12);
+check('two reps still get estimated', estimate1RM(140, 2), 149.3);
+check('no weight scores nothing', estimate1RM(0, 5), 0);
 check('a set with no reps scores nothing', e1rmOf({ weight_kg: 100, reps: 0 }), 0);
 check('bodyweight-style set scores nothing', e1rmOf({ weight_kg: 0, reps: 10 }), 0);
 
@@ -37,7 +41,7 @@ check('beating it again later in the day is another PR', ids([
   { id: 'c', exercise_name: 'Bench', weight_kg: 105, reps: 8 },
 ], bench), ['a', 'c']);
 check('matching the all-time best exactly is not a PR', ids([
-  { id: 'a', exercise_name: 'Bench', weight_kg: 120, reps: 0 },
+  { id: 'a', exercise_name: 'Bench', weight_kg: 120, reps: 1 },
   { id: 'b', exercise_name: 'Bench', weight_kg: 90, reps: 10 },
 ], { Bench: { bestE1RM: 120 } }), []);
 check('a lighter set after a PR is not a PR', ids([
@@ -51,6 +55,13 @@ check('two exercises keep their own records', ids([
   { id: 'b', exercise_name: 'Squat', weight_kg: 100, reps: 8 },
   { id: 'c', exercise_name: 'Bench', weight_kg: 100, reps: 8 },
 ], { Bench: { bestE1RM: 120 }, Squat: { bestE1RM: 200 } }), ['a']);
+
+check('a single that beats the best is still a PR', ids([
+  { id: 'a', exercise_name: 'Bench', weight_kg: 125, reps: 1 },
+], bench), ['a']);
+check('a single below the best estimate is not a PR', ids([
+  { id: 'a', exercise_name: 'Bench', weight_kg: 115, reps: 1 },
+], bench), []);
 
 // Guards
 check('no badge before history has loaded', ids([

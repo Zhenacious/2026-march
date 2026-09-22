@@ -11,7 +11,7 @@ import { Plus, Trash2, Pencil, Check, X, Dumbbell, Search, ChevronLeft, ChevronR
 import { CATEGORY_COLORS, MUSCLE_GROUPS, normalizeCategory } from '../lib/categories';
 import { DEFAULT_TRACK_TYPE, prefillFromSet, setPayloadFromValues, formatDuration, emptyValues, isValidEntry } from '../lib/trackTypes';
 import SetEntryFields from '../components/SetEntryFields';
-import { computePrSetIds } from '../lib/personalRecords';
+import { computePrSetIds, estimate1RM } from '../lib/personalRecords';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDrag } from '@use-gesture/react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -840,7 +840,7 @@ export default function Today() {
       // Effort is e1RM for weight exercises; distance then duration for
       // cardio-type ones (all sets of one exercise share a track type).
       const effortScore = (s) => {
-        if (s.weight_kg > 0 && s.reps > 0) return s.weight_kg * (1 + s.reps / 30);
+        if (s.weight_kg > 0 && s.reps > 0) return estimate1RM(s.weight_kg, s.reps);
         if (s.distance > 0) return s.distance * 1e6 + (s.duration_seconds || 0);
         return s.duration_seconds || 0;
       };
@@ -853,10 +853,8 @@ export default function Today() {
         let bestE1RM = 0;
         const byDate = {};
         for (const s of history) {
-          if (s.weight_kg > 0 && s.reps > 0) {
-            const e1rm = Math.round(s.weight_kg * (1 + s.reps / 30) * 10) / 10;
-            if (e1rm > bestE1RM) bestE1RM = e1rm;
-          }
+          const e1rm = estimate1RM(s.weight_kg, s.reps);
+          if (e1rm > bestE1RM) bestE1RM = e1rm;
           (byDate[s.date] = byDate[s.date] || []).push(s);
         }
         const lastSessionDate = Object.keys(byDate).sort((a, b) => b.localeCompare(a))[0];

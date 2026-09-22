@@ -5,6 +5,7 @@ import { fetchAllRows } from '../lib/fetchAll';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Trash2, Trophy, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { effectiveWeight } from '../lib/bodyWeight';
+import { estimate1RM } from '../lib/personalRecords';
 import { useBodyWeights } from '../hooks/useBodyWeights';
 import { format, parseISO } from 'date-fns';
 import {
@@ -82,12 +83,9 @@ export default function ExerciseHistory() {
   function buildChartFromSessions(sessionList, dateFmt = 'MMM d yy') {
     const ascending = [...sessionList].reverse();
     return ascending.map(({ date, sets }) => {
-      const e1rmValues = sets.map((s) => {
-        const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
-        return (s.reps || 0) > 0
-          ? Math.round(effW * (1 + (s.reps || 0) / 30) * 10) / 10
-          : effW;
-      });
+      const e1rmValues = sets.map((s) =>
+        estimate1RM(effectiveWeight(s.weight_kg, s.reps, date, bodyWeights), s.reps)
+      );
       const maxE1RM = e1rmValues.length ? Math.max(...e1rmValues) : 0;
       const totalVolume = sets.reduce((sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0), 0);
       return {
@@ -256,7 +254,7 @@ export default function ExerciseHistory() {
         const effW = effectiveWeight(s.weight_kg, s.reps, date, bodyWeights);
         const r = s.reps || 0;
         if (effW > 0 && r > 0) {
-          const e1rm = Math.round(effW * (1 + r / 30) * 10) / 10;
+          const e1rm = estimate1RM(effW, r);
           if (e1rm > bestE1RM.value) bestE1RM = { value: e1rm, weight: effW, reps: r, date };
         }
         if (r === 1 && effW > best1RM.value) best1RM = { value: effW, date };
@@ -500,11 +498,7 @@ export default function ExerciseHistory() {
           {/* Session history */}
           <div className="space-y-4">
             {sessions.map(({ date, sets }) => {
-              const bestE1RM = Math.max(...sets.map((s) =>
-                (s.reps || 0) > 0
-                  ? Math.round((s.weight_kg || 0) * (1 + (s.reps || 0) / 30) * 10) / 10
-                  : (s.weight_kg || 0)
-              ));
+              const bestE1RM = Math.max(...sets.map((s) => estimate1RM(s.weight_kg, s.reps)));
               return (
                 <div key={date} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">

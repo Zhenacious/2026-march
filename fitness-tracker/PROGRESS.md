@@ -88,6 +88,24 @@ so they pick up their Chinese names (rows saved before the column existed have n
   Today.jsx. Matching a record is not beating it, and badges survive a reload.
 - Test: `npm run test:pr` (13 assertions, no database).
 
+### Records page audit (2026-09-23)
+- **Singles were estimated upwards.** Every page ran Epley (`w * (1 + reps/30)`)
+  even on a 1-rep set, so a 140 kg single showed as an estimated 1RM of 144.7 -
+  higher than the lift itself. `bodyWeight.js` and the connector already
+  special-cased it; the three pages each had their own copy that didn't.
+  Checked against live data: 20 singles logged, Barbell Squat's headline best
+  was wrong (144.7 -> 140).
+- `estimate1RM()` in `src/lib/personalRecords.js` is now the ONLY front-end
+  copy of the formula (Today, Exercise History x3, Records). `epley1RM` is gone
+  from `bodyWeight.js`. `api/_athleteData.js` keeps its own copy (separate
+  serverless bundle) - it was already correct; keep the two in step.
+- Records also: sets with a weight but no reps (5 exist, bad imports) no longer
+  count towards a best e1RM; the page fetched every workout row unpaged (would
+  have silently dropped history past 1000 workout days - 269 now) and listed
+  all their ids in the sets URL, now one `workouts!inner(date)` join paged with
+  `fetchAllRows`, in parallel with the exercise list; query errors showed as
+  "No records yet" and now show a real message.
+
 ### Athlete OS connector (built 2026-09-08)
 - Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
   (claude.ai project / Claude Code) can pull training, food and weight data live.
