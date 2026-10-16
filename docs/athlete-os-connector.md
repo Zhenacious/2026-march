@@ -5,7 +5,8 @@ Claude Desktop) can pull your training, food and body weight data live from the
 database whenever you ask a coaching question. Nothing is copied or duplicated,
 and the connector has no way to write anything.
 
-Code: `fitness-tracker/api/mcp.js` (the endpoint) and
+Code: `fitness-tracker/api/mcp.js` (the endpoint),
+`fitness-tracker/api/_connectorAuth.js` (turns a link key into a user) and
 `fitness-tracker/api/_athleteData.js` (the queries).
 
 ## What Claude can call
@@ -21,65 +22,54 @@ Dates use the `FITTRACK_TZ` time zone (default `Pacific/Auckland`).
 
 ## How it is secured
 
-- The URL contains a long random key: `https://dolphfittrack.vercel.app/api/mcp/<MCP_ACCESS_KEY>`.
-  A wrong key returns a plain 404. Treat the full URL like a password.
-- The server signs in to Supabase as your own FitTrack login (email + password from
-  Vercel's environment). Supabase row-level security then guarantees it can only see
-  your rows, and the code only ever issues SELECT queries.
+- Each user's link looks like `https://dolphfittrack.vercel.app/api/mcp/ft_<random>`.
+  You make it on the **Connect to Claude** page in FitTrack. Only a SHA-256 hash
+  (a one-way scrambled fingerprint) of the key is stored, in the `connector_keys`
+  table, so the full link is shown once and cannot be looked up again. Treat it like
+  a password.
+- The server looks the hash up using `SUPABASE_SERVICE_ROLE_KEY`. That secret lives
+  only in Vercel and is never given a `VITE_` name (which would expose it to the
+  browser). Every query is then filtered to that one user.
+  `scripts/test-connector-scope.mjs` checks this (`npm run test:connector`).
+- Unknown, malformed or revoked keys get a plain 404. The code only ever runs
+  SELECT queries, never writes.
 - No secrets live in the code or in git. `.env` and `.env.local` are git-ignored.
 
 ## One-time setup
 
-### 1. Generate the access key
+### Site owner (once)
 
-In a terminal inside `fitness-tracker/`:
+In the Vercel dashboard -> your FitTrack project -> **Settings -> Environment
+Variables**, add `SUPABASE_SERVICE_ROLE_KEY` for the **Production** environment. Find
+the value in Supabase -> Project Settings -> API -> `service_role` key. Then
+**Deployments -> latest -> Redeploy** so the functions pick it up.
 
-```
-node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
-```
+Optional: `FITTRACK_TZ` (default `Pacific/Auckland`). `VITE_SUPABASE_URL` should
+already be there from the original deployment.
 
-Copy the printed string. That is your `MCP_ACCESS_KEY`.
+If the secret is missing, the connector answers "Connector is not configured".
 
-### 2. Add four environment variables in Vercel
+### Every user: make your link
 
-Vercel dashboard -> your FitTrack project -> **Settings -> Environment Variables**.
-Add each for the **Production** environment:
+In FitTrack, open **More -> Connect to Claude -> Generate my link**, then press
+**Copy**. Keep it somewhere safe, because it is shown only once.
 
-| Name | Value |
-|---|---|
-| `FITTRACK_EMAIL` | the email you log in to FitTrack with |
-| `FITTRACK_PASSWORD` | that account's password |
-| `MCP_ACCESS_KEY` | the string from step 1 |
-| `FITTRACK_TZ` | `Pacific/Auckland` (optional, this is the default) |
-
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` should already be there from the
-original deployment. Then **Deployments -> latest -> Redeploy** so the functions
-pick up the new variables.
-
-### 3. Check it works
-
-```
-node scripts/test-mcp.mjs https://dolphfittrack.vercel.app/api/mcp/<MCP_ACCESS_KEY>
-```
-
-You should see `server: fittrack v1.0.0`, four tools, and real data from each tool.
-
-### 4. Connect it to Claude
+### Connect it to Claude
 
 **claude.ai (your Athlete OS project):** Settings -> Connectors -> **Add custom
-connector**. Name it `FitTrack`, paste the full URL from step 3 including the key,
+connector**. Name it `FitTrack`, paste your link from the Connect to Claude page,
 leave the OAuth fields empty, and add. Then enable it in the project's tools menu.
 Custom connectors need a Pro, Max, Team or Enterprise plan.
 
 **Claude Code:**
 
 ```
-claude mcp add --transport http fittrack https://dolphfittrack.vercel.app/api/mcp/<MCP_ACCESS_KEY>
+claude mcp add --transport http fittrack <your link>
 ```
 
-**Claude Desktop:** Settings -> Connectors -> Add custom connector, same URL.
+**Claude Desktop:** Settings -> Connectors -> Add custom connector, same link.
 
-### 5. Tell the Athlete OS project to use it
+### Tell the Athlete OS project to use it
 
 Paste this into the project's instructions (and the "Where my data lives" section
 of its CLAUDE.md), replacing any placeholder about FitTrack:
@@ -94,15 +84,18 @@ of its CLAUDE.md), replacing any placeholder about FitTrack:
 
 ## Testing locally without deploying
 
+Add `SUPABASE_SERVICE_ROLE_KEY` to `fitness-tracker/.env`, then:
+
 ```
-npm run mcp:dev      # starts http://localhost:8787/api/mcp/<key>
-npm run test:mcp     # in a second terminal
+npm run mcp:dev                    # starts http://localhost:8787/api/mcp/<key>
+npm run test:mcp -- <URL>          # in a second terminal, with a real link
 ```
 
-Both read `.env` and `.env.local` in `fitness-tracker/`. Add `FITTRACK_EMAIL`,
-`FITTRACK_PASSWORD` and `MCP_ACCESS_KEY` to `.env` for a full local test.
+Instead of passing the URL, you can put your link's key in `.env` as `MCP_TEST_KEY`
+and run `npm run test:mcp`. `npm run test:connector` runs the key and scope tests.
 
 ## Rotating or revoking access
 
-Change `MCP_ACCESS_KEY` in Vercel and redeploy. The old URL immediately stops working.
-Update the connector URL in Claude afterwards.
+On the Connect to Claude page, press **Make a new link** (the old one stops
+immediately) or **Revoke** (confirm with "Yes, revoke"). Update the link in Claude
+afterwards if you made a new one.

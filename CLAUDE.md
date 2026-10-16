@@ -34,6 +34,7 @@ A React + Supabase fitness tracker app located in `fitness-tracker/`.
 | `/calendar` | `CalendarView.jsx` | Monthly calendar of workout days |
 | `/progress` | `Progress.jsx` | Progress charts per exercise |
 | `/records` | `PersonalRecords.jsx` | All-time bests per exercise, filterable by muscle group |
+| `/connect-claude` | `ConnectClaude.jsx` | Make, copy or revoke your personal Claude connector link |
 | `/import` | `Import.jsx` | Import from FitNotes CSV |
 
 ## Database (Supabase)
@@ -48,7 +49,7 @@ Schema changes go in `fitness-tracker/supabase/migrations/` and are applied with
 
 ## Athlete OS connector
 
-`fitness-tracker/api/mcp.js` is a read-only MCP server so Claude (claude.ai project or Claude Code) can pull workouts, exercise history, food and body weight live. Setup and the text to paste into the Athlete OS project live in `docs/athlete-os-connector.md`. Keep it read-only; never add a tool that writes.
+`fitness-tracker/api/mcp.js` is a read-only MCP server so Claude (claude.ai project or Claude Code) can pull workouts, exercise history, food and body weight live. Each user makes their own link on the **Connect to Claude** page (`/connect-claude`); keys are stored hashed in `connector_keys` and resolved in `api/_connectorAuth.js` with the server-only `SUPABASE_SERVICE_ROLE_KEY`. Every query must filter to the resolved user (`npm run test:connector` checks this). Setup lives in `docs/athlete-os-connector.md`. Keep it read-only; never add a tool that writes.
 
 ---
 
