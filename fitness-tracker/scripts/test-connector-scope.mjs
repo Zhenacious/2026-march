@@ -5,7 +5,7 @@
 // Run: node scripts/test-connector-scope.mjs
 import {
   getRecentWorkouts, getExerciseHistory, getFoodLog, getWeightLog,
-} from '../api/_athleteData.js';
+} from '../api/_connectorData.js';
 
 const USER = 'user-a';
 const USER_WORKOUT_IDS = ['w1'];

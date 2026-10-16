@@ -1,4 +1,4 @@
-# Athlete OS connector (FitTrack -> Claude)
+# FitTrack Claude connector
 
 FitTrack exposes a small, **read-only** MCP server so Claude (claude.ai, Claude Code,
 Claude Desktop) can pull your training, food and body weight data live from the
@@ -7,7 +7,7 @@ and the connector has no way to write anything.
 
 Code: `fitness-tracker/api/mcp.js` (the endpoint),
 `fitness-tracker/api/_connectorAuth.js` (turns a link key into a user) and
-`fitness-tracker/api/_athleteData.js` (the queries).
+`fitness-tracker/api/_connectorData.js` (the queries).
 
 ## What Claude can call
 
@@ -77,7 +77,7 @@ In FitTrack, open **More -> Connect to Claude -> Generate my link**, then press
 
 ### Connect it to Claude
 
-**claude.ai (your Athlete OS project):** Settings -> Connectors -> **Add custom
+**claude.ai:** Settings -> Connectors -> **Add custom
 connector**. Name it `FitTrack`, paste your link from the Connect to Claude page,
 leave the OAuth fields empty, and add. Then enable it in the project's tools menu.
 Custom connectors need a Pro, Max, Team or Enterprise plan.
@@ -90,10 +90,10 @@ claude mcp add --transport http fittrack <your link>
 
 **Claude Desktop:** Settings -> Connectors -> Add custom connector, same link.
 
-### Tell the Athlete OS project to use it
+### Optional: tell a Claude project to use it
 
-Paste this into the project's instructions (and the "Where my data lives" section
-of its CLAUDE.md), replacing any placeholder about FitTrack:
+If you use a claude.ai project for training advice, paste this into its instructions
+so Claude pulls your data instead of asking for it:
 
 > **FitTrack (source of truth for lifting, food and body weight).** Live data via the
 > `FitTrack` connector, read-only. Before answering anything about recent training,

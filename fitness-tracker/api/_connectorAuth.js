@@ -3,7 +3,7 @@
 // users manage from the Connect to Claude page.
 //
 // Uses the service-role key, which bypasses row-level security, because the
-// request carries no user login. That is why every query in _athleteData.js
+// request carries no user login. That is why every query in _connectorData.js
 // filters to the userId returned here. Server only: never import from src/.
 
 import { createClient } from '@supabase/supabase-js';

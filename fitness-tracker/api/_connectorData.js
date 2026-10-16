@@ -1,4 +1,4 @@
-// Read-only data access for the Athlete OS connector (api/mcp.js).
+// Read-only data access for the FitTrack Claude connector (api/mcp.js).
 //
 // Every function takes ctx = { client, userId }. api/_connectorAuth.js builds
 // it from the connector link's key. The client uses Supabase's service-role

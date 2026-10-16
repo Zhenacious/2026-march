@@ -591,7 +591,7 @@ export default function Today() {
   });
 
   // Per-set notes come from the rows themselves (workout_sets.notes), so they
-  // show on every device and reach the export and the Athlete OS connector.
+  // show on every device and reach the export and the Claude connector.
   const setNotes = useMemo(
     () => Object.fromEntries(sets.filter((s) => s.notes).map((s) => [s.id, s.notes])),
     [sets]

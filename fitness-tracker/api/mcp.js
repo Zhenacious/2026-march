@@ -1,4 +1,4 @@
-// Athlete OS connector (served at /api/mcp/<key> via the rewrite in vercel.json): a small, read-only MCP server that lets Claude (claude.ai
+// FitTrack Claude connector (served at /api/mcp/<key> via the rewrite in vercel.json): a small, read-only MCP server that lets Claude (claude.ai
 // or Claude Code) pull FitTrack data live from the database.
 //
 // URL shape:  https://<your-fittrack-domain>/api/mcp/<personal key>
@@ -12,7 +12,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import {
   getRecentWorkouts, getExerciseHistory, getFoodLog, getWeightLog,
-} from './_athleteData.js';
+} from './_connectorData.js';
 import { resolveConnectorUser } from './_connectorAuth.js';
 
 // Wraps a data function so the tool returns JSON text, or a readable error.

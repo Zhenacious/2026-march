@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runs the Athlete OS connector (api/mcp.js) on your own computer so it
+ * Runs the FitTrack Claude connector (api/mcp.js) on your own computer so it
  * can be tested without deploying. Reads the same variables from
  * fitness-tracker/.env that Vercel reads from its environment settings.
  *

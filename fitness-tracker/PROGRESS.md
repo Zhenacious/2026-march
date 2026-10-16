@@ -97,7 +97,7 @@ so they pick up their Chinese names (rows saved before the column existed have n
   was wrong (144.7 -> 140).
 - `estimate1RM()` in `src/lib/personalRecords.js` is now the ONLY front-end
   copy of the formula (Today, Exercise History x3, Records). `epley1RM` is gone
-  from `bodyWeight.js`. `api/_athleteData.js` keeps its own copy (separate
+  from `bodyWeight.js`. `api/_connectorData.js` keeps its own copy (separate
   serverless bundle) - it was already correct; keep the two in step.
 - Records also: sets with a weight but no reps (5 exist, bad imports) no longer
   count towards a best e1RM; the page fetched every workout row unpaged (would
@@ -106,13 +106,17 @@ so they pick up their Chinese names (rows saved before the column existed have n
   `fetchAllRows`, in parallel with the exercise list; query errors showed as
   "No records yet" and now show a real message.
 
-### Athlete OS connector (built 2026-09-08)
-- Read-only MCP server at `api/mcp.js` + `api/_athleteData.js`, so Claude
-  (claude.ai project / Claude Code) can pull training, food and weight data live.
+### Claude connector (built 2026-09-08, per-user links 2026-10-16)
+- Read-only MCP server at `api/mcp.js` + `api/_connectorData.js`, so any
+  FitTrack user's Claude (claude.ai / Claude Code / Desktop) can pull their
+  training, food and weight data live.
   Four tools: get_recent_workouts, get_exercise_history, get_food_log, get_weight_log.
-- Signs in as the user's own FitTrack login (RLS enforces single-user visibility);
-  key in the URL path; wrong key = 404. Full setup guide: `docs/athlete-os-connector.md`.
-- Local test: `npm run mcp:dev` then `npm run test:mcp`. Live test:
+- Each user makes their own link on the Connect to Claude page (`/connect-claude`).
+  Only the key's SHA-256 hash is stored (`connector_keys`); `api/_connectorAuth.js`
+  looks it up with the server-only `SUPABASE_SERVICE_ROLE_KEY`, and every query
+  filters to that user (`npm run test:connector`). Unknown/revoked key = 404.
+  Full setup guide: `docs/claude-connector.md`.
+- Local test: `npm run mcp:dev` then `npm run test:mcp -- <link>`. Live test:
   `node scripts/test-mcp.mjs https://dolphfittrack.vercel.app/api/mcp/<key>`.
   (2026-09-09) **Verified live**: all four tools return real data from Vercel.
   FITTRACK_EMAIL/PASSWORD/MCP_ACCESS_KEY are set in Vercel and in local `.env`.
@@ -191,8 +195,9 @@ past days. That was a deliberate choice (confirmed with the user), not an accide
   a Progress page, and describes the app as workout-only with no mention of food).
 
 ## Next ideas (rough priority order)
-0. Finish the Athlete OS connector setup: env vars in Vercel, redeploy, run
-   `node scripts/test-mcp.mjs <deployed URL>`, add the connector in claude.ai.
+0. Claude connector switch-over: generate a link on Connect to Claude, put it in
+   claude.ai, check with `node scripts/test-mcp.mjs <link>`, then delete
+   FITTRACK_EMAIL / FITTRACK_PASSWORD / MCP_ACCESS_KEY from Vercel.
    Open the Body Weight page once on the phone so old entries sync to the DB.
 1. Test the camera scanner on a phone; test the Add Food modal end to end.
 2. Refresh `CLAUDE.md` — it predates the entire food feature.

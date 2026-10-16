@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Smoke test for the Athlete OS connector. Talks to a running server the same
+ * Smoke test for the FitTrack Claude connector. Talks to a running server the same
  * way Claude does (JSON-RPC over HTTP) and prints what each tool returns.
  *
  *   npm run test:mcp -- <URL>   a connector URL (local or deployed)
