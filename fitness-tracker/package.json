@@ -14,7 +14,8 @@
     "migrate:status": "node scripts/migrate.mjs --status",
     "check:rls": "node scripts/check-rls.mjs",
     "mcp:dev": "node scripts/mcp-local.mjs",
-    "test:mcp": "node scripts/test-mcp.mjs"
+    "test:mcp": "node scripts/test-mcp.mjs",
+    "test:connector": "node scripts/test-connector-key.mjs && node scripts/test-connector-scope.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
