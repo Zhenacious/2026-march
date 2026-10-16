@@ -15,7 +15,7 @@ export default function ConnectClaude() {
   const [busy, setBusy] = useState(false);
   const [newLink, setNewLink] = useState('');       // shown once, right after generating
   const [copied, setCopied] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [confirming, setConfirming] = useState(null); // null | 'revoke' | 'regenerate'
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function ConnectClaude() {
   }, [user.id]);
 
   async function generate() {
+    setConfirming(null);
     setBusy(true);
     setError('');
     try {
@@ -60,7 +61,7 @@ export default function ConnectClaude() {
     setError('');
     const { error: err } = await supabase.from('connector_keys').delete().eq('user_id', user.id);
     setBusy(false);
-    setConfirmRevoke(false);
+    setConfirming(null);
     if (err) { setError(err.message); return; }
     setCreatedAt(null);
     setNewLink('');
@@ -129,28 +130,37 @@ export default function ConnectClaude() {
 
         {!loading && (
           <div className="flex flex-wrap gap-2 mt-4">
-            <button
-              onClick={generate}
-              disabled={busy}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-100 text-sm px-3 py-2 rounded-lg"
-            >
-              <RefreshCw className="w-4 h-4" />
-              {createdAt ? 'Make a new link' : 'Generate my link'}
-            </button>
-            {createdAt && !confirmRevoke && (
+            {confirming !== 'regenerate' && (
               <button
-                onClick={() => setConfirmRevoke(true)}
+                onClick={() => (createdAt ? setConfirming('regenerate') : generate())}
+                disabled={busy}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-100 text-sm px-3 py-2 rounded-lg"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {createdAt ? 'Make a new link' : 'Generate my link'}
+              </button>
+            )}
+            {confirming === 'regenerate' && (
+              <span className="flex items-center gap-2 text-sm text-zinc-300">
+                Your current link will stop working.
+                <button onClick={generate} disabled={busy} className="text-purple-400 hover:text-purple-300 font-medium">Yes, make a new link</button>
+                <button onClick={() => setConfirming(null)} className="text-zinc-400 hover:text-zinc-200">Cancel</button>
+              </span>
+            )}
+            {createdAt && confirming === null && (
+              <button
+                onClick={() => setConfirming('revoke')}
                 disabled={busy}
                 className="flex items-center gap-1.5 text-red-400 hover:text-red-300 text-sm px-3 py-2 rounded-lg"
               >
                 <Trash2 className="w-4 h-4" /> Revoke
               </button>
             )}
-            {confirmRevoke && (
+            {confirming === 'revoke' && (
               <span className="flex items-center gap-2 text-sm text-zinc-300">
                 Claude will lose access.
                 <button onClick={revoke} disabled={busy} className="text-red-400 hover:text-red-300 font-medium">Yes, revoke</button>
-                <button onClick={() => setConfirmRevoke(false)} className="text-zinc-400 hover:text-zinc-200">Cancel</button>
+                <button onClick={() => setConfirming(null)} className="text-zinc-400 hover:text-zinc-200">Cancel</button>
               </span>
             )}
           </div>

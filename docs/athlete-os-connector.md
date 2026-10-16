@@ -47,7 +47,28 @@ the value in Supabase -> Project Settings -> API -> `service_role` key. Then
 Optional: `FITTRACK_TZ` (default `Pacific/Auckland`). `VITE_SUPABASE_URL` should
 already be there from the original deployment.
 
-If the secret is missing, the connector answers "Connector is not configured".
+If something is wrong on the server side (for example the secret is missing), the
+connector answers "Connector lookup failed".
+
+Once your new link works (see below), delete `FITTRACK_EMAIL`, `FITTRACK_PASSWORD`
+and `MCP_ACCESS_KEY` from the same Vercel page (Settings -> Environment Variables).
+The connector no longer uses them, and removing them takes your FitTrack password
+out of Vercel.
+
+### Upgrading from the old shared link
+
+After this version is deployed, the old link (the one built from `MCP_ACCESS_KEY`)
+stops working. Do these steps in order:
+
+1. Add `SUPABASE_SERVICE_ROLE_KEY` in Vercel (see above).
+2. Deploy (Deployments -> latest -> Redeploy).
+3. In FitTrack, open **More -> Connect to Claude -> Generate my link** and copy it.
+4. Replace the old URL with the new one in claude.ai (Settings -> Connectors ->
+   FitTrack), and in Claude Code too if you use it.
+5. Check it works: from the `fitness-tracker/` folder run
+   `node scripts/test-mcp.mjs <new link>`.
+6. Delete the three old Vercel variables: `FITTRACK_EMAIL`, `FITTRACK_PASSWORD`
+   and `MCP_ACCESS_KEY`.
 
 ### Every user: make your link
 
@@ -88,11 +109,13 @@ Add `SUPABASE_SERVICE_ROLE_KEY` to `fitness-tracker/.env`, then:
 
 ```
 npm run mcp:dev                    # starts http://localhost:8787/api/mcp/<key>
-npm run test:mcp -- <URL>          # in a second terminal, with a real link
+npm run test:mcp -- <URL>          # in a second terminal
 ```
 
-Instead of passing the URL, you can put your link's key in `.env` as `MCP_TEST_KEY`
-and run `npm run test:mcp`. `npm run test:connector` runs the key and scope tests.
+`npm run test:mcp -- <URL>` tests whatever URL you pass, for example your live link
+from the Connect to Claude page. If you instead put your link's key in `.env` as
+`MCP_TEST_KEY`, plain `npm run test:mcp` tests the local server started by
+`npm run mcp:dev`. `npm run test:connector` runs the key and scope tests.
 
 ## Rotating or revoking access
 
