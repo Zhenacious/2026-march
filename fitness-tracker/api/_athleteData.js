@@ -1,48 +1,12 @@
 // Read-only data access for the Athlete OS connector (api/mcp.js).
 //
-// Signs in to Supabase as the FitTrack user with the email/password from the
-// environment, so Supabase's row-level security guarantees the connector can
-// only ever see that one user's rows. Every function here only SELECTs.
-// Nothing in this file, or in the connector, writes to the database.
+// Every function takes ctx = { client, userId }. api/_connectorAuth.js builds
+// it from the connector link's key. The client uses Supabase's service-role
+// key, which bypasses row-level security, so EVERY query here must filter to
+// ctx.userId (scripts/test-connector-scope.mjs checks this). Every function
+// here only SELECTs. Nothing in this file, or in the connector, writes.
 
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 const TZ = process.env.FITTRACK_TZ || 'Pacific/Auckland';
-
-// ---- auth (cached across warm invocations) --------------------------------
-
-let cached = null; // { client, userId, expiresAt }
-
-export async function getClient() {
-  const now = Math.floor(Date.now() / 1000);
-  if (cached && cached.expiresAt - 60 > now) return cached;
-
-  // Values pasted into a dashboard often pick up stray spaces or quote marks
-  const clean = (v) => String(v || '').trim().replace(/^["']|["']$/g, '');
-  const email = clean(process.env.FITTRACK_EMAIL);
-  const password = clean(process.env.FITTRACK_PASSWORD);
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase URL / anon key are not set in the environment.');
-  }
-  if (!email || !password) {
-    throw new Error('FITTRACK_EMAIL and FITTRACK_PASSWORD are not set in the environment.');
-  }
-
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(`FitTrack sign-in failed: ${error.message}`);
-
-  cached = {
-    client,
-    userId: data.user.id,
-    expiresAt: data.session?.expires_at || now + 3000,
-  };
-  return cached;
-}
 
 // ---- dates ------------------------------------------------------------------
 
@@ -142,9 +106,8 @@ function summariseExercise(name, sets, catMap) {
   return out;
 }
 
-export async function getRecentWorkouts({ days } = {}) {
+export async function getRecentWorkouts({ days } = {}, { client, userId }) {
   const n = clampCount(days, 14, 365);
-  const { client, userId } = await getClient();
   const since = daysAgoISO(n);
   const today = todayISO();
 
@@ -189,11 +152,10 @@ export async function getRecentWorkouts({ days } = {}) {
   return { timezone: TZ, from: since, to: today, session_count: sessions.length, sessions };
 }
 
-export async function getExerciseHistory({ exercise, sessions } = {}) {
+export async function getExerciseHistory({ exercise, sessions } = {}, { client, userId }) {
   const q = String(exercise || '').trim();
   if (q.length < 2) throw new Error('exercise must be at least 2 characters.');
   const limit = clampCount(sessions, 10, 100);
-  const { client, userId } = await getClient();
 
   const rows = await fetchAllRows(() => client
     .from('workout_sets')
@@ -253,9 +215,8 @@ export async function getExerciseHistory({ exercise, sessions } = {}) {
   };
 }
 
-export async function getFoodLog({ days } = {}) {
+export async function getFoodLog({ days } = {}, { client, userId }) {
   const n = clampCount(days, 7, 365);
-  const { client, userId } = await getClient();
   const since = daysAgoISO(n);
   const today = todayISO();
 
@@ -319,9 +280,8 @@ export async function getFoodLog({ days } = {}) {
   };
 }
 
-export async function getWeightLog({ days } = {}) {
+export async function getWeightLog({ days } = {}, { client, userId }) {
   const n = clampCount(days, 90, 3650);
-  const { client, userId } = await getClient();
   const since = daysAgoISO(n);
 
   const { data, error } = await client
