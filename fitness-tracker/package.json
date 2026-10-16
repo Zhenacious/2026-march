@@ -12,6 +12,7 @@
     "test:pr": "node scripts/test-pr-badge.mjs",
     "migrate": "node scripts/migrate.mjs",
     "migrate:status": "node scripts/migrate.mjs --status",
+    "check:rls": "node scripts/check-rls.mjs",
     "mcp:dev": "node scripts/mcp-local.mjs",
     "test:mcp": "node scripts/test-mcp.mjs"
   },

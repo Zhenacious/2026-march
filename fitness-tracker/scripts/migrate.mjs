@@ -93,7 +93,10 @@ async function main() {
       create table if not exists schema_migrations (
         filename text primary key,
         applied_at timestamptz not null default now()
-      )
+      );
+      -- Lives in the public schema, so lock it away from the site's anon key.
+      -- This script connects as the owner, which bypasses RLS.
+      alter table schema_migrations enable row level security;
     `);
 
     const { rows } = await client.query('select filename from schema_migrations');
