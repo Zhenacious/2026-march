@@ -17,6 +17,7 @@ import {
   ChevronUp,
   Trophy,
   RefreshCw,
+  Plug,
 } from 'lucide-react';
 
 // Shown for the moment a page's code is being fetched (pages load on demand).
@@ -44,6 +45,7 @@ const moreNavItems = [
   { to: '/body-weight', label: 'Body weight',      icon: Scale },
   { to: '/dashboard',   label: 'Stats',            icon: LayoutDashboard },
   { to: '/import',      label: 'Import / Export',  icon: Upload },
+  { to: '/connect-claude', label: 'Connect to Claude', icon: Plug },
 ];
 
 export default function Layout() {

@@ -39,6 +39,7 @@ const BodyWeightTracker = lazyPage(() => import('./pages/BodyWeightTracker'));
 const PersonalRecords = lazyPage(() => import('./pages/PersonalRecords'));
 const Trends = lazyPage(() => import('./pages/Trends'));
 const MyFoods = lazyPage(() => import('./pages/MyFoods'));
+const ConnectClaude = lazyPage(() => import('./pages/ConnectClaude'));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/records" element={<PersonalRecords />} />
         <Route path="/trends" element={<Trends />} />
         <Route path="/foods" element={<MyFoods />} />
+        <Route path="/connect-claude" element={<ConnectClaude />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/today" replace />} />
