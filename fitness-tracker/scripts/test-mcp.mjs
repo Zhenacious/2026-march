@@ -3,8 +3,8 @@
  * Smoke test for the Athlete OS connector. Talks to a running server the same
  * way Claude does (JSON-RPC over HTTP) and prints what each tool returns.
  *
- *   npm run test:mcp                               local server from "npm run mcp:dev"
- *   node scripts/test-mcp.mjs https://.../api/mcp/KEY   the deployed one
+ *   npm run test:mcp -- <URL>   a connector URL (local or deployed)
+ *   npm run test:mcp            local server from "npm run mcp:dev", using MCP_TEST_KEY from .env
  *
  * Exit code is 0 only if the server answers initialize + tools/list and every
  * tool call either succeeds or fails for a clearly reported reason.
@@ -15,8 +15,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 for (const f of ['.env', '.env.local']) { try { process.loadEnvFile(path.join(ROOT, f)); } catch { /* optional */ } }
 
-const key = process.env.MCP_ACCESS_KEY || 'local-dev-key';
-const url = process.argv[2] || `http://localhost:${process.env.MCP_PORT || 8787}/api/mcp/${key}`;
+const key = process.env.MCP_TEST_KEY;
+const url = process.argv[2] || (key && `http://localhost:${process.env.MCP_PORT || 8787}/api/mcp/${key}`);
+if (!url) {
+  console.error('Pass the connector URL, e.g. node scripts/test-mcp.mjs https://.../api/mcp/ft_...\n'
+    + 'or set MCP_TEST_KEY in .env to test the local server.');
+  process.exit(1);
+}
 
 let nextId = 1;
 async function rpc(method, params) {
@@ -61,8 +66,7 @@ try {
     const text = r.content?.[0]?.text || '';
     if (r.isError) {
       console.log(`\n== ${name} -> tool reported an error:\n${text}`);
-      // Missing credentials is expected until the env vars are set; anything else is a failure
-      if (!/not set in the environment|sign-in failed/.test(text)) failed = true;
+      failed = true;
     } else {
       show(name, text.length > 900 ? `${text.slice(0, 900)}... (${text.length} chars)` : text);
     }
